@@ -1,0 +1,6 @@
+data/*
+results/*
+*.asv
+*.RData
+*.Rhistory
+.DS_Store
