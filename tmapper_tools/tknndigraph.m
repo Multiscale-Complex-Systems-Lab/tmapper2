@@ -12,17 +12,29 @@ function g = tknndigraph(XorD,k,tidx,varargin)
 %   neighbors iff tidx[x]+1 = tidx[y] or tidx[x]-1 = tidx[y].
 % output:
 %   g: matlab graph object (unweighted, undirected).
+% parameters:
+%   reciprocal: whether to enforce spatial-knn neighbors to be reciprocal.
+%   default is true
+%   timeExcludeSpace: enforce temporal neighbors cannot be spatial
+%   neighbors. default is true.
+%   timeExcludeRange: how many time points following each time points is
+%   considered the temporal neighborhood (in the range samples cannot be
+%   spatial neighbors). default is 1.
 %{
 created by MZ, 8-16-2019
 modifcations:
 (8-20-2019) add option to not enforce reciprocity.
 (2-5-2020) add option to determine whether temporal link can be a spatial
 link. parameter: timeExcludeSpace
+(3-26-2024) add option to define time range to exclude for spatial knn
+calculation. enforced spatial knn to not include temporal neighbors. Reduce
+k by 1 relative to previous versions will yield same result.
 
 %}
 p = inputParser;
 p.addParameter('reciprocal',true)% spatially reciprocal
 p.addParameter('timeExcludeSpace',true)% whether temporal links are allow to be spatial links
+p.addParameter('timeExcludeRange',1); % how many time links to exclude
 p.parse(varargin{:})
 par = p.Results;
 
@@ -39,9 +51,14 @@ D(logical(eye(Nn))) = Inf; % exclude self-loops
 
 % -- find indices for temporal links D_{i(t),i(t+1)}
 t_wafter = circshift(tidx,-1,1) - 1 == tidx; % for which time points there exist a time point after
-t_after_idx = circshift(diag(t_wafter),1,2);
+t_after_idx1 = circshift(diag(t_wafter),1,2); % matrix indicate immediate time points that follows
+t_after_idx = triu(zeros(Nn));% initialize time connectivity matrix to indicate time points that follows up to a range
+for n = 1:par.timeExcludeRange
+    t_after_idx = t_after_idx | circshift(diag(t_wafter),n,2);
+end
+t_after_idx = triu(t_after_idx);% ensure time doesn't flow backward
 if par.timeExcludeSpace
-    D(t_after_idx) = 0;
+    D(t_after_idx) = Inf;
 end
 
 % -- compute adjacency matrix
@@ -65,7 +82,7 @@ else
 end
 
 % -- (re-)incoporate temporal links
-A = t_after_idx | A_space; 
+A = t_after_idx1 | A_space; 
 
 % -- convert to graph
 g = digraph(A);

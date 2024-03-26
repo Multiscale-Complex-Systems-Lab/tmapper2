@@ -61,9 +61,9 @@ cb.Label.String = "L-" + p + " distance";
 %% ===== construct temporal mapper network =====
 
 % --- tmapper construction parameters
-k = 4;
-d = 3;
-
+k = 3;
+d = 3; % compression rate. loops below this parameter is absorbed into nodes
+texclude = 30; % a temporal neighborhood where you consider things are not recurring. (in unit of time points)
 % --- define a variable for coloring the graph
 colorvarname = 'tmax';
 colorvar = dat{:,colorvarname};
@@ -72,7 +72,7 @@ colorvar = dat{:,colorvarname};
 disp("computing knn graph")
 tidx = (1:length(t))';
 tic
-g = tknndigraph (D,k,tidx,'reciprocal',true,'timeExcludeSpace', true);
+g = tknndigraph (D,k,tidx,'reciprocal',true,'timeExcludeSpace', true,'timeExcludeRange',texclude);
 toc
 
 % --- construct simplified graph
@@ -81,7 +81,7 @@ tic
 [g_simp, members, nodesize, D_simp] = filtergraph(g,d,'reciprocal',true);
 toc
 
-g_simp.Edges.Weight(:) = 1;
+
 % --- show transition networks      and recurrence plot
 [a1,a2,~,~,hg,D_geo] = plotgraphtcm(g_simp,colorvar,t,members,'nodesizerange',[1,10],...
     'colorlabel',colorvarname,'labelmethod','median','nodesizemode','log');
