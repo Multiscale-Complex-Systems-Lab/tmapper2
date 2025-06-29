@@ -29,12 +29,14 @@ link. parameter: timeExcludeSpace
 (3-26-2024) add option to define time range to exclude for spatial knn
 calculation. enforced spatial knn to not include temporal neighbors. Reduce
 k by 1 relative to previous versions will yield same result.
+(6-29-2025) handle edge case of duplicate points
 
 %}
 p = inputParser;
 p.addParameter('reciprocal',true)% spatially reciprocal
 p.addParameter('timeExcludeSpace',true)% whether temporal links are allow to be spatial links
 p.addParameter('timeExcludeRange',1); % how many time links to exclude
+p.addParameter('maxNeighborDist',Inf); % maximal distance between two points for them to be considered as spatial neighbors
 p.parse(varargin{:})
 par = p.Results;
 
@@ -64,9 +66,13 @@ end
 
 % -- compute adjacency matrix
 A = zeros(Nn,Nn);
-[~,Ic]=sort(D,2);
+[Ds,Ic]=sort(D,2);
 I = sub2ind([Nn Nn], repmat((1:Nn)',1,k), Ic(:,1:k));
 A(I(:))=1;
+
+% -- check for duplicate points
+dmax = Ds(:,k); % maximal distance in each point's spatial neighborhood
+A(D<=repmat(dmax,1,Nn)) = 1; % other points with the same distance are also included
 
 % -- exclude or retain temporal links as spatial links 
 if par.timeExcludeSpace
