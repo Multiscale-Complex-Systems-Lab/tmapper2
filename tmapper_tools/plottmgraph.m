@@ -27,14 +27,14 @@ function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
 %{
 ~ created by MZ, 7/5/2024, adapted from PLOTGRAPHTCM ~
 modifications:
-(6/29/2025) add option to not use scatterplot
+(6/29/2025) add option to not use scatterplot. correct rank. 
 
 %}
 
 p = inputParser;
-p.addParameter('nodesizerange',[1 20]);
-p.addParameter('nodesizemode','rank')% whether of not use ranked node size
-p.addParameter('colorlabel',"x_label")% what variable does x_label reflect
+p.addParameter('nodesizerange',[1 10]);
+p.addParameter('nodesizemode','log')% whether of not use ranked node size
+p.addParameter('colorlabel',"x\_label")% what variable does x_label reflect
 p.addParameter('cmap','jet') % colormap
 % p.addParameter('normalize',false) % whether or not 
 p.addParameter('labelmethod','mode')% methods for labeling nodes
@@ -45,12 +45,12 @@ p.parse(varargin{:});
 par = p.Results;
 
 % -- check nodes
-if nargin<4 || isempty(nodemembers)
+if ~exist("nodemembers","var") || isempty(nodemembers)
     nodemembers = num2cell((1:g.numnodes)');
 end
 
 % -- check labels for members
-if nargin<2 || isempty(x_label)
+if ~exist("x_label","var") || isempty(x_label)
     x_label = ones(length(unique(cell2mat(nodemembers(:)))),1);
 end
 
@@ -65,7 +65,7 @@ buniform = length(unique(nodesize))==1; % if all nodes are of the same size
 if ~buniform%adjust nodesize with rank
     switch par.nodesizemode
         case 'rank'
-            nodesize = rankval(nodesize);% the marker size reflects the rank of the node size
+            nodesize = tiedrank(nodesize);% the marker size reflects the rank of the node size
         case 'log'
             nodesize = log10(nodesize);% on log scale.
     end

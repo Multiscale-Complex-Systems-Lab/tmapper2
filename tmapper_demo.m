@@ -23,7 +23,7 @@ clear all
 close all
 clc
 
-dat = readtable('EL_temp.csv');
+dat = readtable(fullfile('sampledata','EL_temp.csv'));
 dat = rmmissing(dat);% remove missing data
 dat = dat(53884:end,:);% just take some recent data for demo
 %% ===== quick look at data =====
