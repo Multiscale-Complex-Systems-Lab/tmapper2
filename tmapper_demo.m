@@ -73,6 +73,8 @@ cb.Label.String = "L-" + p + " distance";
 k = 3;
 d = 3; % compression rate. loops below this parameter is absorbed into nodes
 texclude = 30; % a temporal neighborhood where you consider things are not recurring. usually 1 is good. (in unit of time points)
+maxdistprct = 95; % maximal distance between neighbors by percentile.
+maxdist = 0.5; % maximal distance between neighbors by absolute value;
 
 % --- define a variable for coloring the graph
 colorvarname = 'tmax';
@@ -82,7 +84,10 @@ colorvar = dat{:,colorvarname};
 disp("computing knn graph")
 tidx = (1:length(t))';% these indices will be used to define temporal neighborhoods
 tic
-g = tknndigraph (D,k,tidx,'reciprocal',true,'timeExcludeSpace', true,'timeExcludeRange',texclude);
+g = tknndigraph (D,k,tidx,...
+                'timeExcludeRange',texclude,...
+                'maxNeighborDistPrct',maxdistprct,...
+                'maxNeighborDist',maxdist);
 toc
 
 % --- step 2: construct simplified graph
@@ -97,7 +102,7 @@ toc
 % --- show transition networks and recurrence plot
 [a1,a2,~,~,hg,D_geo] = plotgraphtcm(g_simp,colorvar,t,members,'nodesizerange',[1,10],...
     'colorlabel',colorvarname,'labelmethod','median','nodesizemode','log');
-title(a1,["sample data","k=" + k + ", d=" + d])
+title(a1,["sample data","k=" + k + ", d=" + d, "tx=" + texclude])
 %% ===== P.S. =====
 % CycleCount2p can be used to calculate the cycles in the graph, which can
 % be quite fun to explore. 

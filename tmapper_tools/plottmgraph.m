@@ -27,6 +27,7 @@ function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
 %{
 ~ created by MZ, 7/5/2024, adapted from PLOTGRAPHTCM ~
 modifications:
+(6/29/2025) add option to not use scatterplot
 
 %}
 
@@ -38,6 +39,7 @@ p.addParameter('cmap','jet') % colormap
 % p.addParameter('normalize',false) % whether or not 
 p.addParameter('labelmethod','mode')% methods for labeling nodes
 p.addParameter('nodeclim',[])% [min max] of the color axis for the node colors
+p.addParameter('nodescatter',false)% plot scatterplot overlay of nodes (to look better)
 p.parse(varargin{:});
 
 par = p.Results;
@@ -87,9 +89,13 @@ caxis(par.nodeclim)
 colormap(gca, par.cmap)
 h1 = gca;
 % -- overlay with scatter plot for better visualization
-hold on
-[~,idx] = sort(hg.MarkerSize,'ascend'); % --- determine scatter order
-hs=scatter(hg.XData(idx),hg.YData(idx),hg.MarkerSize(idx).^2,hg.NodeCData(idx),...
-    'filled','MarkerEdgeColor','k','LineWidth',0.2);
+if par.nodescatter
+    hold on
+    [~,idx] = sort(hg.MarkerSize,'ascend'); % --- determine scatter order
+    hs=scatter(hg.XData(idx),hg.YData(idx),hg.MarkerSize(idx).^2,hg.NodeCData(idx),...
+        'filled','MarkerEdgeColor','k','LineWidth',0.2);
+else
+    hs = [];
+end
 end
 

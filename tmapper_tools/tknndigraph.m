@@ -1,4 +1,4 @@
-function g = tknndigraph(XorD,k,tidx,varargin)
+function [g, par] = tknndigraph(XorD,k,tidx,varargin)
 %TKNNDIGRAPH construct a directed graph based on k-nearest neighbors which
 %much include its temporal neighbors. Here we do so by simply set the
 %distance between consecutive time points to zero before running knn.
@@ -12,6 +12,7 @@ function g = tknndigraph(XorD,k,tidx,varargin)
 %   neighbors iff tidx[x]+1 = tidx[y] or tidx[x]-1 = tidx[y].
 % output:
 %   g: matlab graph object (unweighted, undirected).
+%   par: parameters used
 % parameters:
 %   reciprocal: whether to enforce spatial-knn neighbors to be reciprocal.
 %   default is true
@@ -20,6 +21,14 @@ function g = tknndigraph(XorD,k,tidx,varargin)
 %   timeExcludeRange: how many time points following each time points is
 %   considered the temporal neighborhood (in the range samples cannot be
 %   spatial neighbors). default is 1.
+%   maxNeighborDist: maximal distance between two points for them to be
+%   considered as spatial neighbors. Default, Inf (so no max). If
+%   maxNeighborDistPrct is also given, actual threshold will be the min of
+%   the two.
+%   maxNeighborDistPrct: maximal percentile distance between two points for
+%   them to be considered as spatial neighbors. Default 100 (so no max). If
+%   maxNeighborDist is also given, actual threshold will be the min of the
+%   two. 
 %{
 created by MZ, 8-16-2019
 modifcations:
@@ -29,7 +38,7 @@ link. parameter: timeExcludeSpace
 (3-26-2024) add option to define time range to exclude for spatial knn
 calculation. enforced spatial knn to not include temporal neighbors. Reduce
 k by 1 relative to previous versions will yield same result.
-(6-29-2025) handle edge case of duplicate points
+(6-29-2025) handle edge case of duplicate points. add max distances. 
 
 %}
 p = inputParser;
@@ -37,8 +46,10 @@ p.addParameter('reciprocal',true)% spatially reciprocal
 p.addParameter('timeExcludeSpace',true)% whether temporal links are allow to be spatial links
 p.addParameter('timeExcludeRange',1); % how many time links to exclude
 p.addParameter('maxNeighborDist',Inf); % maximal distance between two points for them to be considered as spatial neighbors
+p.addParameter('maxNeighborDistPrct',100); % maximal percentile distance between two points for them to be considered as spatial neighbors
 p.parse(varargin{:})
 par = p.Results;
+par.k = k;
 
 % -- check input and obtain distance matrix D
 [nr,nc]=size(XorD);
@@ -73,6 +84,12 @@ A(I(:))=1;
 % -- check for duplicate points
 dmax = Ds(:,k); % maximal distance in each point's spatial neighborhood
 A(D<=repmat(dmax,1,Nn)) = 1; % other points with the same distance are also included
+
+% -- get distance threshold
+par.maxNeighborDist = min(prctile(D(:),par.maxNeighborDistPrct),par.maxNeighborDist);% the smaller one of the percentage vs absolute distance
+
+% -- remove neighbors that exceed max distance
+A(D>par.maxNeighborDist) = 0;
 
 % -- exclude or retain temporal links as spatial links 
 if par.timeExcludeSpace
