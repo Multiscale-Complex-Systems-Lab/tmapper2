@@ -50,6 +50,7 @@ Nn = length(D); % number of nodes
 D(logical(eye(Nn))) = Inf; % exclude self-loops
 
 % -- find indices for temporal links D_{i(t),i(t+1)}
+tidx = tidx(:); % make sure tidx is a column vector
 t_wafter = circshift(tidx,-1,1) - 1 == tidx; % for which time points there exist a time point after
 t_after_idx1 = circshift(diag(t_wafter),1,2); % matrix indicate immediate time points that follows
 t_after_idx = triu(zeros(Nn));% initialize time connectivity matrix to indicate time points that follows up to a range

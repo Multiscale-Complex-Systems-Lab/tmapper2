@@ -1,15 +1,11 @@
-function [h1, h2, cb, cb_, hg,D_geo] = plotgraphtcm(g,x_label,t,nodemembers, varargin)
-%PLOTGRAPHTCM plot a shape graph and its correspomding geodesic recurrence
-%plot (a kind of temporal connectivity matrix). 
-%   [h1,h2] = plotgraphtcm(g,x_label,t,nodemembers, ...)
+function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
+%PLOTTMGRAPH plot a temporal mapper graph without recurrence plot. 
+%   [h1,cb,hg] = plottmgraph(g,x_label,t,nodemembers, ...)
 % input:
 %   g: a graph or digraph (MATLAB object). 
 %   x_label: a label for each member of each node of the graph, assumed to
 %   be a N-by-1 vector of integer indices, where N is the number of unique
 %   members of all nodes.
-%   t: time associated with each member of each node. a N-by-1 vector.
-%   nodemembers: a numnodes-by-1 cell array. Each cell contains a vector of
-%   integer indices, indicating which time points belong to this node.
 % parameters:
 %   nodesizerange: [s_min, s_max], where s_min is the smallest markersize
 %   when plotting the nodes of the graph, and s_max is the largest
@@ -23,24 +19,14 @@ function [h1, h2, cb, cb_, hg,D_geo] = plotgraphtcm(g,x_label,t,nodemembers, var
 %   labelmethod: how to color code each node based on members' labels.
 %   Options: mode (default), mean, median.
 % output:
-%   h1: axis handle of the first subplot (the graph).
-%   h2: axis handle of the second subplot (the geodesic recurrence plot).
+%   h1: axis handle of the plot.
 %   cb: handle of the colorbar of graph
-%   cb_: handle of the colorbar of recurrence plot
 %   hg: handle of the graph
-%   D_geo: the recurrence plot matrix.
 
 %{
-created by MZ, 9/13/2019
+~ created by MZ, 7/5/2024, adapted from PLOTGRAPHTCM ~
 modifications:
-(9/30/2019) adjust color range, node size for special cases, and
-calculation of distances (change to unweighted)
-(2/11/2020) add colormap options
-(11/11/2020) add more handle output
-(MZ 5/29/2023) allow options for labeling methods, return recurrence
-matrix.allow using non-ranked node size. 
-(MZ 3/12/2024) add option to change color limits for nodes
-(MZ 7/4/2024) ensure time is column vector
+
 %}
 
 p = inputParser;
@@ -89,9 +75,7 @@ end
 nodelabel = findnodelabel(nodemembers,x_label,'labelmethod',par.labelmethod);
 
 % -- plotting
-figure('position',[10,10,1000,400]);
 % plot graph
-subplot(1,2,1)
 hg=plot(g,'EdgeAlpha',0.3,'EdgeColor','k','NodeCData',nodelabel,'NodeLabel','',...
     'Layout','force','UseGravity',true,'ArrowSize',5,'MarkerSize',nodesize); 
 axis equal
@@ -101,22 +85,10 @@ cb.Label.String = par.colorlabel;
 caxis(par.nodeclim)
 colormap(gca, par.cmap)
 h1 = gca;
-
-% plot geodesic recurrence plot (aka TCM)
-if bsinglemember
-    D_geo = distances(g,'Method','unweighted');
-else
-    D_geo = TCMdistance(g,nodemembers);
-end
-subplot(1,2,2)
-imagesc(t,t,D_geo);
-cb_ = colorbar;
-colormap(gca, 'hot')
-axis square
-xlabel('time (s)')
-ylabel('time (s)')
-title('geodesic recurrence plot')
-cb_.Label.String = 'path length';
-h2 = gca;
+% -- overlay with scatter plot for better visualization
+hold on
+[~,idx] = sort(hg.MarkerSize,'ascend'); % --- determine scatter order
+hs=scatter(hg.XData(idx),hg.YData(idx),hg.MarkerSize(idx).^2,hg.NodeCData(idx),...
+    'filled','MarkerEdgeColor','k','LineWidth',0.2);
 end
 

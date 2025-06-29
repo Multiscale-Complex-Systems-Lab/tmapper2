@@ -24,6 +24,8 @@ switch par.labelmethod
         m = cell2mat(cellfun(@(x) mean(x_label(x)), members,'uniformoutput',0));
     case 'median'
         m = cell2mat(cellfun(@(x) median(x_label(x)), members,'uniformoutput',0));
+    case "none"% no color
+        m = cell2mat(cellfun(@(x) 0,members,'uniformoutput',0));
 end
 end
 
