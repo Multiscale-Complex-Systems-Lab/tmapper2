@@ -22,6 +22,7 @@ function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
 %   h1: axis handle of the plot.
 %   cb: handle of the colorbar of graph
 %   hg: handle of the graph
+%   hs: handle of the scatter plot overlay of the graph
 
 %{
 ~ created by MZ, 7/5/2024, adapted from PLOTGRAPHTCM ~

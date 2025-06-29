@@ -1,4 +1,4 @@
-function [h1, h2, cb, cb_, hg,D_geo] = plotgraphtcm(g,x_label,t,nodemembers, varargin)
+function [h1, h2, cb, cb_, hg,D_geo, hs] = plotgraphtcm(g,x_label,t,nodemembers, varargin)
 %PLOTGRAPHTCM plot a shape graph and its correspomding geodesic recurrence
 %plot (a kind of temporal connectivity matrix). 
 %   [h1,h2] = plotgraphtcm(g,x_label,t,nodemembers, ...)
@@ -29,6 +29,7 @@ function [h1, h2, cb, cb_, hg,D_geo] = plotgraphtcm(g,x_label,t,nodemembers, var
 %   cb_: handle of the colorbar of recurrence plot
 %   hg: handle of the graph
 %   D_geo: the recurrence plot matrix.
+%   hs: handle of the scatter plot overlay of the graph
 
 %{
 created by MZ, 9/13/2019
@@ -41,66 +42,18 @@ calculation of distances (change to unweighted)
 matrix.allow using non-ranked node size. 
 (MZ 3/12/2024) add option to change color limits for nodes
 (MZ 7/4/2024) ensure time is column vector
+(MZ 6/29/2025) clear up function by calling plottmgraph
 %}
 
-p = inputParser;
-p.addParameter('nodesizerange',[1 20]);
-p.addParameter('nodesizemode','rank')% whether of not use ranked node size
-p.addParameter('colorlabel','attractor index')
-p.addParameter('cmap','jet') % colormap
-% p.addParameter('normalize',false) % whether or not 
-p.addParameter('labelmethod','mode')% methods for labeling nodes
-p.addParameter('nodeclim',[])% [min max] of the color axis for the node colors
-p.parse(varargin{:});
-
-par = p.Results;
-
-% -- check nodes
-if nargin<4 || isempty(nodemembers)
-    nodemembers = num2cell((1:g.numnodes)');
-end
-
-% -- check labels for members
-if nargin<2 || isempty(x_label)
-    x_label = ones(length(unique(cell2mat(nodemembers(:)))),1);
-end
-
-% -- check other parameters
-if isempty(par.nodeclim)
-    par.nodeclim = double([min(x_label) max(x_label)]);
-end
-% -- define node size
-nodesize = cell2mat(cellfun(@(x) length(x), nodemembers, 'UniformOutput',0));
+% -- check for unweighted graph
+nodesize = cell2mat(cellfun(@(x) length(x), nodemembers, 'UniformOutput',0));% define node size
 bsinglemember = all(nodesize==1);% there is only one member associated with each node.
-buniform = length(unique(nodesize))==1; % if all nodes are of the same size
-if ~buniform%adjust nodesize with rank
-    switch par.nodesizemode
-        case 'rank'
-            nodesize = rankval(nodesize);% the marker size reflects the rank of the node size
-        case 'log'
-            nodesize = log10(nodesize);% on log scale.
-    end
-    nodesize = rescale(nodesize, min(par.nodesizerange), max(par.nodesizerange));
-else%adjust nodesize with number of nodes
-    nodesize = ones(g.numnodes,1)*(par.nodesizerange(1)+range(par.nodesizerange)/g.numnodes);
-end
-
-% -- define node labels
-nodelabel = findnodelabel(nodemembers,x_label,'labelmethod',par.labelmethod);
 
 % -- plotting
 figure('position',[10,10,1000,400]);
 % plot graph
 subplot(1,2,1)
-hg=plot(g,'EdgeAlpha',0.3,'EdgeColor','k','NodeCData',nodelabel,'NodeLabel','',...
-    'Layout','force','UseGravity',true,'ArrowSize',5,'MarkerSize',nodesize); 
-axis equal
-axis off
-cb=colorbar;
-cb.Label.String = par.colorlabel;
-caxis(par.nodeclim)
-colormap(gca, par.cmap)
-h1 = gca;
+[h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin{:});
 
 % plot geodesic recurrence plot (aka TCM)
 if bsinglemember
