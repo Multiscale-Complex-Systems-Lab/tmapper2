@@ -1,6 +1,6 @@
 function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
 %PLOTTMGRAPH plot a temporal mapper graph without recurrence plot. 
-%   [h1,cb,hg] = plottmgraph(g,x_label,t,nodemembers, ...)
+%   [h1,cb,hg,hs] = plottmgraph(g,x_label,t,nodemembers, ...)
 % input:
 %   g: a graph or digraph (MATLAB object). 
 %   x_label: a label for each member of each node of the graph, assumed to
@@ -14,10 +14,10 @@ function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
 %   (default, rank of node size), original (og node size), log (log of node
 %   size)
 %   colorlabel: label of the color axis (meaning of the color-coding of
-%   nodes), default "attractor index".
+%   nodes), default "x_label".
 %   cmap: colormap. passed on to matlab function `colormap`
-%   labelmethod: how to color code each node based on members' labels.
-%   Options: mode (default), mean, median.
+%   labelmethod: how to color code each node based on members' x_labels.
+%   Options: mode (default), mean, median, or none (everything same color).
 % output:
 %   h1: axis handle of the plot.
 %   cb: handle of the colorbar of graph
@@ -34,7 +34,7 @@ modifications:
 p = inputParser;
 p.addParameter('nodesizerange',[1 20]);
 p.addParameter('nodesizemode','rank')% whether of not use ranked node size
-p.addParameter('colorlabel','attractor index')
+p.addParameter('colorlabel',"x_label")% what variable does x_label reflect
 p.addParameter('cmap','jet') % colormap
 % p.addParameter('normalize',false) % whether or not 
 p.addParameter('labelmethod','mode')% methods for labeling nodes

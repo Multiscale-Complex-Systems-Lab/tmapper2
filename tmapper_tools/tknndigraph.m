@@ -2,7 +2,7 @@ function [g, par] = tknndigraph(XorD,k,tidx,varargin)
 %TKNNDIGRAPH construct a directed graph based on k-nearest neighbors which
 %much include its temporal neighbors. Here we do so by simply set the
 %distance between consecutive time points to zero before running knn.
-%   g = tknngraph(XorD,k,tidx)
+%   g = tknndigraph(XorD,k,tidx)
 % input:
 %   XorD: a N-by-d matrix (X) of the coordinates of N points in d-sim
 %       space, or a N-by-N distance matrix (D). If the input is X, D is
@@ -11,7 +11,7 @@ function [g, par] = tknndigraph(XorD,k,tidx,varargin)
 %   tidx: a vector of N integers, two points x, y are considered temporal
 %   neighbors iff tidx[x]+1 = tidx[y] or tidx[x]-1 = tidx[y].
 % output:
-%   g: matlab graph object (unweighted, undirected).
+%   g: matlab graph object (unweighted, directed).
 %   par: parameters used
 % parameters:
 %   reciprocal: whether to enforce spatial-knn neighbors to be reciprocal.

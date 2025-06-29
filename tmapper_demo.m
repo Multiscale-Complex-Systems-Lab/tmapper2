@@ -77,6 +77,7 @@ maxdistprct = 95; % maximal distance between neighbors by percentile.
 maxdist = 0.5; % maximal distance between neighbors by absolute value;
 
 % --- define a variable for coloring the graph
+% this could be any variable that assign a value to each time point
 colorvarname = 'tmax';
 colorvar = dat{:,colorvarname};
 
@@ -84,7 +85,7 @@ colorvar = dat{:,colorvarname};
 disp("computing knn graph")
 tidx = (1:length(t))';% these indices will be used to define temporal neighborhoods
 tic
-g = tknndigraph (D,k,tidx,...
+[g, par] = tknndigraph (D,k,tidx,...
                 'timeExcludeRange',texclude,...
                 'maxNeighborDistPrct',maxdistprct,...
                 'maxNeighborDist',maxdist);
@@ -102,7 +103,7 @@ toc
 % --- show transition networks and recurrence plot
 [a1,a2,~,~,hg,D_geo] = plotgraphtcm(g_simp,colorvar,t,members,'nodesizerange',[1,10],...
     'colorlabel',colorvarname,'labelmethod','median','nodesizemode','log');
-title(a1,["sample data","k=" + k + ", d=" + d, "tx=" + texclude])
+title(a1,["sample data","k=" + k + ", d=" + d, "tx=" + texclude + ", maxdist=" + par.maxNeighborDist])
 %% ===== P.S. =====
 % CycleCount2p can be used to calculate the cycles in the graph, which can
 % be quite fun to explore. 

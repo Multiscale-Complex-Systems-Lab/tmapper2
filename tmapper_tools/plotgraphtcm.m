@@ -1,13 +1,15 @@
 function [h1, h2, cb, cb_, hg,D_geo, hs] = plotgraphtcm(g,x_label,t,nodemembers, varargin)
-%PLOTGRAPHTCM plot a shape graph and its correspomding geodesic recurrence
-%plot (a kind of temporal connectivity matrix). 
-%   [h1,h2] = plotgraphtcm(g,x_label,t,nodemembers, ...)
+%PLOTGRAPHTCM plot a Temporal Mapper graph and its correspomding geodesic
+%recurrence plot (a kind of temporal connectivity matrix).
+% Usage:
+%   plotgraphtcm(g,x_label,t,nodemembers)
+%   [...] = plotgraphtcm(g,x_label,t,nodemembers,...)
 % input:
 %   g: a graph or digraph (MATLAB object). 
-%   x_label: a label for each member of each node of the graph, assumed to
-%   be a N-by-1 vector of integer indices, where N is the number of unique
-%   members of all nodes.
-%   t: time associated with each member of each node. a N-by-1 vector.
+%   x_label: a label for each time point in the time series, assumed to be
+%   a N-by-1 vector of numeric values, where N is the total number of time
+%   points.
+%   t: actual time associated with each time point. a N-by-1 vector.
 %   nodemembers: a numnodes-by-1 cell array. Each cell contains a vector of
 %   integer indices, indicating which time points belong to this node.
 % parameters:
@@ -18,10 +20,10 @@ function [h1, h2, cb, cb_, hg,D_geo, hs] = plotgraphtcm(g,x_label,t,nodemembers,
 %   (default, rank of node size), original (og node size), log (log of node
 %   size)
 %   colorlabel: label of the color axis (meaning of the color-coding of
-%   nodes), default "attractor index".
+%   nodes), default "x_label".
 %   cmap: colormap. passed on to matlab function `colormap`
-%   labelmethod: how to color code each node based on members' labels.
-%   Options: mode (default), mean, median.
+%   labelmethod: how to color code each node based on members' x_labels.
+%   Options: mode (default), mean, median, or none (everything same color).
 % output:
 %   h1: axis handle of the first subplot (the graph).
 %   h2: axis handle of the second subplot (the geodesic recurrence plot).
