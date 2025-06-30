@@ -1,11 +1,13 @@
 function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
 %PLOTTMGRAPH plot a temporal mapper graph without recurrence plot. 
-%   [h1,cb,hg,hs] = plottmgraph(g,x_label,t,nodemembers, ...)
+%   [h1,cb,hg,hs] = plottmgraph(g,x_label,nodemembers, ...)
 % input:
 %   g: a graph or digraph (MATLAB object). 
 %   x_label: a label for each member of each node of the graph, assumed to
 %   be a N-by-1 vector of integer indices, where N is the number of unique
 %   members of all nodes.
+%   nodemembers: a numnodes-by-1 cell array. Each cell contains a vector of
+%   integer indices, indicating which time points belong to this node.
 % parameters:
 %   nodesizerange: [s_min, s_max], where s_min is the smallest markersize
 %   when plotting the nodes of the graph, and s_max is the largest
