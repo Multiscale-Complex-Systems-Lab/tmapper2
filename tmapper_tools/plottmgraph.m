@@ -30,6 +30,7 @@ function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
 ~ created by MZ, 7/5/2024, adapted from PLOTGRAPHTCM ~
 modifications:
 (6/29/2025) add option to not use scatterplot. correct rank. 
+(9/23/2025) edge case clim when there is no color
 
 %}
 
@@ -87,7 +88,9 @@ axis equal
 axis off
 cb=colorbar;
 cb.Label.String = par.colorlabel;
-caxis(par.nodeclim)
+if diff(par.nodeclim)~=0% if there is a range of values
+    caxis(par.nodeclim)
+end
 colormap(gca, par.cmap)
 h1 = gca;
 % -- overlay with scatter plot for better visualization
