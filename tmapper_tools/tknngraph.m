@@ -2,6 +2,11 @@ function g = tknngraph(XorD,k,tidx,varargin)
 %TKNNGRAPH construct graph based on k-nearest neighbors which much include
 %its temporal neighbors. Here we do so by simply set the distance between
 %consecutive time points to zero before running knn.
+%   NOTE: this is an earlier, simpler undirected variant kept for backward
+%   compatibility. The temporal-mapper pipeline (see README and
+%   tmapper_demo.m) uses TKNNDIGRAPH instead, which supersedes this
+%   function (directed, configurable temporal exclusion, max-distance
+%   cutoff).
 %   g = tknngraph(XorD,k,tidx)
 % input:
 %   XorD: a N-by-d matrix (X) of the coordinates of N points in d-sim

@@ -38,9 +38,22 @@ link. parameter: timeExcludeSpace
 (3-26-2024) add option to define time range to exclude for spatial knn
 calculation. enforced spatial knn to not include temporal neighbors. Reduce
 k by 1 relative to previous versions will yield same result.
-(6-29-2025) handle edge case of duplicate points. add max distances. 
+(6-29-2025) handle edge case of duplicate points. add max distances.
 
 %}
+
+% -- validate required inputs
+if ndims(XorD) ~= 2
+    error('tknndigraph:invalidInput','XorD must be a 2D matrix.');
+end
+if ~isscalar(k) || k < 1 || k ~= round(k)
+    error('tknndigraph:invalidInput','k must be a positive integer scalar.');
+end
+tidx = tidx(:);
+if length(tidx) ~= size(XorD,1)
+    error('tknndigraph:invalidInput','tidx must have the same number of elements as rows of XorD.');
+end
+
 p = inputParser;
 p.addParameter('reciprocal',true)% spatially reciprocal
 p.addParameter('timeExcludeSpace',true)% whether temporal links are allow to be spatial links
@@ -60,10 +73,13 @@ else
 end
 Nn = length(D); % number of nodes
 
+if k >= Nn
+    error('tknndigraph:invalidInput','k must be smaller than the number of points (%d).',Nn);
+end
+
 D(logical(eye(Nn))) = Inf; % exclude self-loops
 
 % -- find indices for temporal links D_{i(t),i(t+1)}
-tidx = tidx(:); % make sure tidx is a column vector
 t_wafter = circshift(tidx,-1,1) - 1 == tidx; % for which time points there exist a time point after
 t_after_idx1 = circshift(diag(t_wafter),1,2); % matrix indicate immediate time points that follows
 t_after_idx = triu(zeros(Nn));% initialize time connectivity matrix to indicate time points that follows up to a range

@@ -42,6 +42,13 @@ modifications:
 
 %}
 
+% -- validate required inputs
+if ~isa(g,'graph') && ~isa(g,'digraph')
+    error('filtergraph:invalidInput','g must be a MATLAB graph or digraph object.');
+end
+if ~isscalar(d) || ~isreal(d) || d <= 0
+    error('filtergraph:invalidInput','d must be a positive real scalar.');
+end
 
 p=inputParser();
 p.addParameter('reciprocal',1);% if require pl(x,y)<0 and pl(y,x)<0 (pl = path length)
