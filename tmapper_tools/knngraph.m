@@ -14,8 +14,18 @@ function g = knngraph(XorD,k,varargin)
 by MZ, 8/16/2019
 modifications:
 (8-20-2019) add option to not enforce reciprocity.
+(7-19-2026) add input validation for XorD and k.
 
 %}
+
+% -- validate required inputs
+if ndims(XorD) ~= 2
+    error('knngraph:invalidInput','XorD must be a 2D matrix.');
+end
+if ~isscalar(k) || k < 1 || k ~= round(k)
+    error('knngraph:invalidInput','k must be a positive integer scalar.');
+end
+
 p = inputParser;
 p.addParameter('reciprocal',true)
 p.parse(varargin{:})
@@ -29,6 +39,10 @@ else
     D = XorD;
 end
 Nn = length(D); % number of nodes
+
+if k >= Nn
+    error('knngraph:invalidInput','k must be smaller than the number of points (%d).',Nn);
+end
 
 % -- compute adjacency matrix
 A = zeros(Nn,Nn);
