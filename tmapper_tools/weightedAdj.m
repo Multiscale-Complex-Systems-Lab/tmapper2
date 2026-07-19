@@ -5,7 +5,7 @@ function A = weightedAdj(g)
 %{
 created by MZ, 9/11/2019
 %}
-    if ~isfield(g.Edges,'Weight')
+    if ~ismember('Weight', g.Edges.Properties.VariableNames)
         g.Edges.Weight = ones(height(g.Edges),1);
     end
     try

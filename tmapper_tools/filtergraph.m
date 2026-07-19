@@ -67,7 +67,7 @@ end
 A_ = zerodiag(A_); % remove self-loop
 
 % -- create graph out of nodes within said threshold
-if isfield(g.Nodes,'Name')
+if ismember('Name', g.Nodes.Properties.VariableNames)
     g_ = graph(A_,g.Nodes.Name);
 else 
     g_ = graph(A_);
@@ -75,7 +75,7 @@ end
 
 % -- find connected components (define the new nodes)
 idx_newnodes = conncomp(g_);
-if isfield(g.Nodes,'Name')
+if ismember('Name', g.Nodes.Properties.VariableNames)
     [members, nodesize] = index2cell(idx_newnodes,g_.Nodes.Name);
 else
     [members, nodesize] = index2cell(idx_newnodes);
@@ -120,7 +120,7 @@ function [members, nodesize] = index2cell(idx_newnodes,oldnodenames)
 % INDEX2CELL convert a vector of labels of new nodes for each old nodes
 % (idx_newnodes) to a cell array where each cell contains the names of the
 % members of each new node. "nodesize" gives the size of the new nodes.
-    if nargin<2 || isempty(oldenodenames)
+    if nargin<2 || isempty(oldnodenames)
         oldnodenames = (1:length(idx_newnodes))';
     end
     

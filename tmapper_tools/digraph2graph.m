@@ -10,13 +10,13 @@ Modifications:
 versions of matlab. added failsafe for graph without nodenames.
 
 %}
-if ~isfield(dg.Edges,'Weight')
+if ~ismember('Weight', dg.Edges.Properties.VariableNames)
     dg.Edges.Weight = ones(height(dg.Edges),1);
 end
 
 A = weightedAdj(dg);
 
-if isfield(dg.Nodes, 'Name')
+if ismember('Name', dg.Nodes.Properties.VariableNames)
     g = graph((A + A')/2,dg.Nodes.Name);
 else
     g = graph((A + A')/2);
