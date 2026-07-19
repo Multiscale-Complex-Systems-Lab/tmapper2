@@ -13,7 +13,13 @@ function [g_simp, members, nodesize, D_simp] = filtergraph(g,d,varargin)
 %   from y to x to be under d in the filtering step. Default, true.
 % output:
 %   g_simp: the simplified graph (analogous to a Mapper shape graph)
-%   members: members of the old graph (old nodes) in each new node
+%   members: members of the old graph (old nodes) in each new node. If g
+%   has no Nodes.Name (e.g. straight from tknndigraph), members contains
+%   the positional indices of g's nodes (1..numnodes(g)) -- NOT tidx
+%   values, even if tidx was non-contiguous or offset when g was built.
+%   Use members2tidx to translate positional-index members back to real
+%   tidx values if needed. If g does have Nodes.Name, members contains
+%   those names instead.
 %   nodesize: # members in each new node
 %   D_simp: simplified "distance" matrix. This gives the shortest distance
 %   between any two group of "members" in the original graph.

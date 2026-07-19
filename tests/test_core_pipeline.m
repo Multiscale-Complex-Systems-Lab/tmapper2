@@ -178,6 +178,72 @@ assert(isequal(adjacency(g_prct), adjacency(g_equivdist)), ...
 assert(numedges(g_prct) <= numedges(gd), ...
     'a finite percentile cutoff should not add edges relative to the unfiltered graph.');
 
+% -- tidx is only ever used via the relative difference between consecutive
+% array positions (tidx(i+1)-tidx(i)==1), never via absolute values, so
+% shifting every entry by the same constant should give an identical graph.
+tidxd_shifted = tidxd + 1;
+g_shifted = tknndigraph(Dd,kd,tidxd_shifted);
+assert(isequal(adjacency(g_shifted), adjacency(gd)), ...
+    'shifting every tidx entry by a constant should not change the resulting graph.');
+
+% -- a genuine discontinuity in tidx (a real time gap between array
+% positions 3 and 4) should suppress exactly the unconditional temporal
+% edge 3->4 at that gap, since points 3 and 4 are no longer considered
+% temporal neighbors. Nothing else changes: point3's/point4's spatial
+% k-NN choices are unaffected (the newly-unmasked D(3,4)=8 is never
+% competitive against their actual nearest neighbors), so the result is
+% the base 9-edge graph minus that one edge.
+tidxd_gap = [1;2;3;7;8;9];
+g_gap = tknndigraph(Dd,kd,tidxd_gap);
+assert(numedges(g_gap) == 8, 'expected 8 edges (missing 3->4) with a genuine time-gap in tidx.');
+for e = [1 3; 3 1; 4 6; 6 4]'
+    assert(findedge(g_gap,e(1),e(2)) ~= 0, ...
+        sprintf('expected spatial edge %d->%d to still exist despite the tidx gap.', e(1), e(2)));
+end
+for e = [1 2; 2 3; 4 5; 5 6]'
+    assert(findedge(g_gap,e(1),e(2)) ~= 0, ...
+        sprintf('expected temporal edge %d->%d to still exist despite the tidx gap.', e(1), e(2)));
+end
+assert(findedge(g_gap,3,4) == 0, ...
+    'the temporal edge 3->4 should be suppressed by the genuine time-gap in tidx.');
+
+% -- members are always positional indices into X/D/tidx (1..N), never the
+% raw tidx values themselves: tknndigraph builds a plain digraph(A) with no
+% Nodes.Name, so filtergraph's default index2cell fallback numbers members
+% 1..N regardless of what tidx contains. Use a tidx that is clearly
+% distinguishable from plain positions (offset and discontinuous) to make
+% this unambiguous, and confirm tidx(members{n}) is how you'd recover the
+% real time labels.
+tidx_real = [101;102;103;207;208;209];
+g_real = tknndigraph(Dd,kd,tidx_real);
+assert(~ismember('Name', g_real.Nodes.Properties.VariableNames), ...
+    'tknndigraph should not attach node names by default.');
+[~, mem_real] = filtergraph(g_real,2,'reciprocal',true);
+ridx13 = find(cellfun(@(m) any(m==1), mem_real));
+ridx46 = find(cellfun(@(m) any(m==4), mem_real));
+assert(isequal(sort(mem_real{ridx13}), [1;3]), ...
+    'members should contain positional indices [1;3], not tidx values [101;103].');
+assert(isequal(sort(tidx_real(mem_real{ridx13})), [101;103]), ...
+    'tidx(members{n}) should recover the real time labels for that node.');
+assert(isequal(sort(mem_real{ridx46}), [4;6]), ...
+    'members should contain positional indices [4;6], not tidx values [207;209].');
+assert(isequal(sort(tidx_real(mem_real{ridx46})), [207;209]), ...
+    'tidx(members{n}) should recover the real time labels for that node.');
+
+% -- members2tidx should do exactly this translation, for every node at
+% once, without disturbing the cell-array shape or node ordering.
+tidx_mem_real = members2tidx(mem_real, tidx_real);
+assert(iscell(tidx_mem_real) && numel(tidx_mem_real) == numel(mem_real), ...
+    'members2tidx should return a cell array with the same number of nodes.');
+assert(isequal(sort(tidx_mem_real{ridx13}), [101;103]), ...
+    'members2tidx should translate the {1,3} node to its real tidx values [101;103].');
+assert(isequal(sort(tidx_mem_real{ridx46}), [207;209]), ...
+    'members2tidx should translate the {4,6} node to its real tidx values [207;209].');
+for n = 1:numel(mem_real)
+    assert(isequal(tidx_mem_real{n}, tidx_real(mem_real{n})), ...
+        'members2tidx should match tidx(members{n}) for every node, not just the two checked above.');
+end
+
 % -- duplicate-point tie handling: with an exact tie for nearest neighbor,
 % ALL tied candidates should be included, not just k of them. 4 points with
 % two exact-duplicate pairs: positions [0,0,5,5]. Point 1's only two

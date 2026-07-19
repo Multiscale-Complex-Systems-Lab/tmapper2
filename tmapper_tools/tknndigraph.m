@@ -11,7 +11,9 @@ function [g, par] = tknndigraph(XorD,k,tidx,varargin)
 %   tidx: a vector of N integers, two points x, y are considered temporal
 %   neighbors iff tidx[x]+1 = tidx[y] or tidx[x]-1 = tidx[y].
 % output:
-%   g: matlab graph object (unweighted, directed).
+%   g: matlab graph object (unweighted, directed). Node i of g corresponds
+%   to row i of XorD / element i of tidx (i.e. node identity is the
+%   position in your input arrays, not the value of tidx(i)).
 %   par: parameters used
 % parameters:
 %   reciprocal: whether to enforce spatial-knn neighbors to be reciprocal.
