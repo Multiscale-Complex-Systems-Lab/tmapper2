@@ -19,17 +19,27 @@ created by MZ, 8-21-2019
 modifications:
 (8-23-2019) adding option to return temporal members of each node, i.e.
 "nodemembers".
+(7-19-2026) fix: num2str on a column vector pads to a common width
+based on that vector's own max value, so the same state could render
+with different padding (e.g. '2' vs ' 2') across trans(:,1), trans(:,2),
+and state_names whenever their max values differed -- breaking node
+name matching in digraph(). Convert each value independently instead.
+(7-19-2026) fix: for a length-1 symDyn, diff() of a scalar returns a
+1x0 (not 0x1) empty, which propagated to state_s/state_t/trans coming
+out 0x0 instead of 0x1/0x2 -- trans(:,2) then failed with no column to
+index. Normalize with (:) so the empty case always has a definite
+column shape.
 
 %}
 
 tidx = (1:length(symDyn))';
-% -- find source and target of each transition 
+% -- find source and target of each transition
 tidx_trans = tidx(diff(int32(symDyn))~=0);
-state_s = symDyn(tidx_trans);
-state_t = symDyn(tidx_trans+1);
+state_s = symDyn(tidx_trans(:));
+state_t = symDyn(tidx_trans(:)+1);
 
 % -- extract unique transitions (define edges)
-trans = unique([state_s state_t],'row');
+trans = unique([state_s(:) state_t(:)],'row');
 
 % -- define states (nodes)
 [state_names,~,state_idx] = unique(symDyn);
@@ -38,7 +48,8 @@ trans = unique([state_s state_t],'row');
 dwelltime = accumarray(state_idx,1);
 
 % -- create digraph
-dg = digraph(cellstr(num2str(trans(:,1))),cellstr(num2str(trans(:,2))),[],cellstr(num2str(state_names)));
+tostr = @(x) arrayfun(@num2str, x(:), 'UniformOutput', false);
+dg = digraph(tostr(trans(:,1)),tostr(trans(:,2)),[],tostr(state_names));
 
 % -- if asked, find members of each node (time points where )
 if nargout>2
