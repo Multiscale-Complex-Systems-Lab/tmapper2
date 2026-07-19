@@ -19,7 +19,8 @@ function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
 %   nodes), default "x_label".
 %   cmap: colormap. passed on to matlab function `colormap`
 %   labelmethod: how to color code each node based on members' x_labels.
-%   Options: mode (default), mean, median, or none (everything same color).
+%   Options: mode (default), mean, median, none (everything same color), or
+%   a function handle applied as labelmethod(x_label(members)) per node.
 % output:
 %   h1: axis handle of the plot.
 %   cb: handle of the colorbar of graph

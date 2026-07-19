@@ -23,7 +23,8 @@ function [h1, h2, cb, cb_, hg,D_geo, hs] = plotgraphtcm(g,x_label,t,nodemembers,
 %   nodes), default "x_label".
 %   cmap: colormap. passed on to matlab function `colormap`
 %   labelmethod: how to color code each node based on members' x_labels.
-%   Options: mode (default), mean, median, or none (everything same color).
+%   Options: mode (default), mean, median, none (everything same color), or
+%   a function handle applied as labelmethod(x_label(members)) per node.
 % output:
 %   h1: axis handle of the first subplot (the graph).
 %   h2: axis handle of the second subplot (the geodesic recurrence plot).

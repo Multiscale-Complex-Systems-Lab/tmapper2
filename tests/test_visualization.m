@@ -154,6 +154,12 @@ assert(isequal(hg_median.NodeCData(:), [10;6;100]), 'median labelmethod gave une
 assert(isequal(hg_none.NodeCData(:), [0;0;0]), 'none labelmethod should give all-zero NodeCData.');
 close all
 
+% -- labelmethod as a custom function handle (range = max-min):
+% node1 -> {10,10,20}: range=10; node2 -> {5,7}: range=2; node3 -> {100}: range=0
+[~,~,hg_custom] = plottmgraph(g3,x_label_vals,members_label,'labelmethod',@(x) max(x)-min(x));
+assert(isequal(hg_custom.NodeCData(:), [10;2;0]), 'custom function-handle labelmethod gave unexpected NodeCData.');
+close all
+
 % -- plottmgraph 'cmap' parameter: a custom colormap should be applied to
 % the axes, not silently ignored.
 cmap_custom = [1 0 0; 0 1 0; 0 0 1];
