@@ -11,12 +11,15 @@ function nodepath = CycleCutter(cyc,nodeName)
 %   point to the next. 
 %{
 ~ Author: Mengsen Zhang <mengsenzhang@gmail.com> 9-2-2020 ~
-
+modifications:
+(7-19-2026) fix: the no-cutting-point branch returned the raw cycle
+array instead of the documented M-by-1 cell array, breaking callers
+(e.g. Cycles2Paths) that assume a cell output.
 %}
 
 nodeIdx = find(ismember(cyc,nodeName));
 if isempty(nodeIdx)
-    nodepath=cyc;
+    nodepath={cyc};
     return
 end
 
