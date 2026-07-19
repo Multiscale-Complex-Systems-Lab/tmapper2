@@ -97,7 +97,12 @@ h1 = gca;
 if par.nodescatter
     hold on
     [~,idx] = sort(hg.MarkerSize,'ascend'); % --- determine scatter order
-    hs=scatter(hg.XData(idx),hg.YData(idx),hg.MarkerSize(idx).^2,hg.NodeCData(idx),...
+    % reshape to a column: scatter() ambiguously treats an exactly-3-
+    % element ROW color vector as a single RGB triplet rather than
+    % per-point color data, which breaks (errors on redraw) for
+    % exactly-3-node graphs whenever the values fall outside [0,1]. A
+    % column vector is never misinterpreted this way.
+    hs=scatter(hg.XData(idx),hg.YData(idx),hg.MarkerSize(idx).^2,reshape(hg.NodeCData(idx),[],1),...
         'filled','MarkerEdgeColor','k','LineWidth',0.2);
 else
     hs = [];

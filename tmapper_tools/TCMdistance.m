@@ -24,8 +24,10 @@ if ~weighted
 end
 % -- extract time
 t = unique(cell2mat(nodet));
-Nt = length(t);
 t_0 = min(t);
+Nt = max(t) - t_0 + 1; % size by the full covered range, not just the count of
+                       % distinct points, so gaps in nodet coverage correctly
+                       % stay NaN instead of silently auto-growing with 0-fill.
 
 % -- construct TCM from graph distance
 TCM_pl = NaN(Nt,Nt);

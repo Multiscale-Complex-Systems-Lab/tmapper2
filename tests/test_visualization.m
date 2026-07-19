@@ -70,6 +70,30 @@ TCM_weighted = TCMdistance(dg_w, nodet_w, true);
 assert(TCM_unweighted(1,3) == 1, 'unweighted TCMdistance should use hop count (1) between node 1 and 3.');
 assert(TCM_weighted(1,3) == 6, 'weighted TCMdistance should use the cheaper weighted path (5+1=6) between node 1 and 3.');
 
+% -- TCMdistance with a genuine gap in nodet coverage (points 3 and 4 are
+% never referenced by any node): previously this silently auto-grew the
+% output matrix and 0-filled the gap instead of leaving it NaN (Nt was
+% sized by count-of-unique-points rather than the covered range). Now
+% fixed to size by the range, so points 3 and 4 correctly stay NaN
+% throughout, while real distances for the covered points (1,2,5) are
+% still correct (chain 1->2->3, so points 1 and 5 are 2 hops apart).
+dg_gap = digraph([1 2],[2 3]); % chain: node1->node2->node3
+nodet_gap = {1;2;5}; % node1=point1, node2=point2, node3=point5 -- points 3,4 uncovered
+TCM_gap = TCMdistance(dg_gap, nodet_gap);
+assert(isequal(size(TCM_gap),[5 5]), 'TCMdistance should size its output by the full covered range (1 to 5).');
+assert(all(isnan(TCM_gap(3,:))) && all(isnan(TCM_gap(:,3))), ...
+    'point 3 is never covered by any node and should stay NaN throughout.');
+assert(all(isnan(TCM_gap(4,:))) && all(isnan(TCM_gap(:,4))), ...
+    'point 4 is never covered by any node and should stay NaN throughout.');
+assert(TCM_gap(1,1)==0 && TCM_gap(2,2)==0 && TCM_gap(5,5)==0, ...
+    'diagonal entries for covered points should be 0.');
+assert(TCM_gap(1,2)==1 && TCM_gap(2,1)==Inf, ...
+    'points 1,2 (nodes 1,2) should have the correct directed hop distances.');
+assert(TCM_gap(1,5)==2 && TCM_gap(5,1)==Inf, ...
+    'points 1,5 (nodes 1,3) should have the correct directed hop distances (2 hops forward, unreachable backward).');
+assert(TCM_gap(2,5)==1 && TCM_gap(5,2)==Inf, ...
+    'points 2,5 (nodes 2,3) should have the correct directed hop distances.');
+
 % -- plottmgraph nodesizemode variants: use sizes [1,2,10] (not evenly
 % spaced, not a geometric progression) so rank/log/original genuinely
 % disagree -- evenly-spaced or geometric-progression sizes would make
@@ -102,6 +126,24 @@ x_label_vals = [10;10;20;5;7;100];
 [~,~,hg_mode] = plottmgraph(g3,x_label_vals,members_label,'labelmethod','mode');
 assert(isequal(hg_mode.NodeCData(:), [10;5;100]), 'mode labelmethod gave unexpected NodeCData.');
 
+% -- nodescatter with EXACTLY 3 nodes and out-of-[0,1]-range colors used
+% to trigger a real MATLAB scatter() ambiguity: a length-3 ROW color
+% vector gets misinterpreted as a single RGB triplet instead of per-point
+% colormap data, throwing "Invalid RGB triplet" on redraw whenever the
+% values aren't all in [0,1]. Fixed by reshaping to a column before
+% calling scatter. This warning is non-fatal (doesn't throw an
+% exception), so a bare assert on the return values wouldn't catch a
+% regression here -- check lastwarn instead.
+lastwarn('');
+[~,~,~,hs_3node] = plottmgraph(g3,x_label_vals,members_label,'labelmethod','mode','nodescatter',true);
+drawnow;
+[warnmsg,~] = lastwarn();
+assert(isempty(warnmsg) || isempty(strfind(warnmsg,'Invalid RGB triplet')), ...
+    'nodescatter on a 3-node graph with out-of-range colors should not trigger the scatter RGB-triplet ambiguity.');
+assert(isequal(hs_3node.CData(:), [100;5;10]), ...
+    'scatter overlay CData should match the sorted-by-size NodeCData values.');
+close all
+
 [~,~,hg_mean] = plottmgraph(g3,x_label_vals,members_label,'labelmethod','mean');
 assert(max(abs(hg_mean.NodeCData(:) - [13+1/3;6;100])) < 1e-9, 'mean labelmethod gave unexpected NodeCData.');
 
@@ -110,6 +152,13 @@ assert(isequal(hg_median.NodeCData(:), [10;6;100]), 'median labelmethod gave une
 
 [~,~,hg_none] = plottmgraph(g3,x_label_vals,members_label,'labelmethod','none');
 assert(isequal(hg_none.NodeCData(:), [0;0;0]), 'none labelmethod should give all-zero NodeCData.');
+close all
+
+% -- plottmgraph 'cmap' parameter: a custom colormap should be applied to
+% the axes, not silently ignored.
+cmap_custom = [1 0 0; 0 1 0; 0 0 1];
+[h1_cmap] = plottmgraph(g3,x_label_vals,members_label,'cmap',cmap_custom);
+assert(isequal(colormap(h1_cmap), cmap_custom), 'plottmgraph should apply the custom cmap to its axes.');
 close all
 
 % -- plottmgraph default nodemembers/x_label (both omitted): should fall
