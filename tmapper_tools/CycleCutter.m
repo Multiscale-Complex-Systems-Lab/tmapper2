@@ -2,8 +2,8 @@ function nodepath = CycleCutter(cyc,nodeName)
 %CYCLECUTTER cut a cycle into multiple paths at given nodes.
 %   nodepath = CycleCutter(cyc,nodeName)
 % input:
-%   cyc: 1-by-N array of nodeNames (usually integers). 
-%   nodeNames: vector of any size, containing names of nodes that are the
+%   cyc: 1-by-N array of node names (usually integers).
+%   nodeName: vector of any size, containing names of nodes that are the
 %   cutting points of the cycle. Names not contained in the cycle is
 %   ignored.
 % output:

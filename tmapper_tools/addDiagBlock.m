@@ -2,10 +2,16 @@ function ax = addDiagBlock(ax,labels,cmap)
 %ADDDIAGBLOCK add blocks on the diagonal of a square matrix to label task
 %structures.
 %   ax = addDiagBlock(ax,labels,cmap)
+% NOTE: must be called immediately after plotting a square matrix with
+% imagesc into `ax` (e.g. via CycleCluster's overlap-matrix plot), with
+% no other objects added to the axes afterward -- N_samples is inferred
+% from ax.Children(end).CData, the imagesc image, which is assumed to be
+% the axes' last (i.e. first-drawn) child. Also depends on findtaskn.m
+% and remapRange.m.
 % input:
-%   ax: axes handle, default current axes 
+%   ax: axes handle, default current axes
 %   labels: N-by-1 vector of positive integers, for a N-by-N matrix to be
-%   labelled. 
+%   labelled.
 %   cmap: M-by-3 matrix, provide a colormap. M is the number of unique
 %   labels.
 % output:
@@ -14,6 +20,8 @@ function ax = addDiagBlock(ax,labels,cmap)
 created by MZ, 2-13-2020
 modifications:
 (9-3-2020) changed range remap: separate start point and block-size remap.
+(7-19-2026) document the ax.Children(end).CData / findtaskn / remapRange
+dependencies, which were previously undocumented and easy to break.
 %}
 
 if isempty(ax)

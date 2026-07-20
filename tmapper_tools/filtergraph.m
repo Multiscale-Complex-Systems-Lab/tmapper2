@@ -57,7 +57,7 @@ if ~isscalar(d) || ~isreal(d) || d <= 0
 end
 
 p=inputParser();
-p.addParameter('reciprocal',1);% if require pl(x,y)<0 and pl(y,x)<0 (pl = path length)
+p.addParameter('reciprocal',1);% if require pl(x,y)<d and pl(y,x)<d (pl = path length)
 p.parse(varargin{:});
 par = p.Results;
 

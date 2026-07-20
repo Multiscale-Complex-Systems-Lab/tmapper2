@@ -17,11 +17,15 @@ function g = tknngraph(XorD,k,tidx,varargin)
 %   neighbors iff tidx[x]+1 = tidx[y] or tidx[x]-1 = tidx[y].
 % output:
 %   g: matlab graph object (unweighted, undirected).
+% parameters:
+%   reciprocal: whether to require a k-nearest-neighbor link to be mutual
+%   (both directions) to be kept. Default true.
 %{
 created by MZ, 8-16-2019
 modifcations:
 (8-20-2019) add option to not enforce reciprocity.
-
+(7-19-2026) document the 'reciprocal' parameter (existed since
+8-20-2019 but was never listed in the header).
 
 %}
 p = inputParser;
