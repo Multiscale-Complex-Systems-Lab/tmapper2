@@ -13,7 +13,13 @@ function [g_simp, members, nodesize, D_simp] = filtergraph(g,d,varargin)
 %   from y to x to be under d in the filtering step. Default, true.
 % output:
 %   g_simp: the simplified graph (analogous to a Mapper shape graph)
-%   members: members of the old graph (old nodes) in each new node
+%   members: members of the old graph (old nodes) in each new node. If g
+%   has no Nodes.Name (e.g. straight from tknndigraph), members contains
+%   the positional indices of g's nodes (1..numnodes(g)) -- NOT tidx
+%   values, even if tidx was non-contiguous or offset when g was built.
+%   Use members2tidx to translate positional-index members back to real
+%   tidx values if needed. If g does have Nodes.Name, members contains
+%   those names instead.
 %   nodesize: # members in each new node
 %   D_simp: simplified "distance" matrix. This gives the shortest distance
 %   between any two group of "members" in the original graph.
@@ -42,9 +48,16 @@ modifications:
 
 %}
 
+% -- validate required inputs
+if ~isa(g,'graph') && ~isa(g,'digraph')
+    error('filtergraph:invalidInput','g must be a MATLAB graph or digraph object.');
+end
+if ~isscalar(d) || ~isreal(d) || d <= 0
+    error('filtergraph:invalidInput','d must be a positive real scalar.');
+end
 
 p=inputParser();
-p.addParameter('reciprocal',1);% if require pl(x,y)<0 and pl(y,x)<0 (pl = path length)
+p.addParameter('reciprocal',1);% if require pl(x,y)<d and pl(y,x)<d (pl = path length)
 p.parse(varargin{:});
 par = p.Results;
 
@@ -60,7 +73,7 @@ end
 A_ = zerodiag(A_); % remove self-loop
 
 % -- create graph out of nodes within said threshold
-if isfield(g.Nodes,'Name')
+if ismember('Name', g.Nodes.Properties.VariableNames)
     g_ = graph(A_,g.Nodes.Name);
 else 
     g_ = graph(A_);
@@ -68,7 +81,7 @@ end
 
 % -- find connected components (define the new nodes)
 idx_newnodes = conncomp(g_);
-if isfield(g.Nodes,'Name')
+if ismember('Name', g.Nodes.Properties.VariableNames)
     [members, nodesize] = index2cell(idx_newnodes,g_.Nodes.Name);
 else
     [members, nodesize] = index2cell(idx_newnodes);
@@ -113,7 +126,7 @@ function [members, nodesize] = index2cell(idx_newnodes,oldnodenames)
 % INDEX2CELL convert a vector of labels of new nodes for each old nodes
 % (idx_newnodes) to a cell array where each cell contains the names of the
 % members of each new node. "nodesize" gives the size of the new nodes.
-    if nargin<2 || isempty(oldenodenames)
+    if nargin<2 || isempty(oldnodenames)
         oldnodenames = (1:length(idx_newnodes))';
     end
     

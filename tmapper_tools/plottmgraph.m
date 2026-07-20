@@ -12,14 +12,19 @@ function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
 %   nodesizerange: [s_min, s_max], where s_min is the smallest markersize
 %   when plotting the nodes of the graph, and s_max is the largest
 %   markersize.
-%   nodesizemode: the method used to calculate node size. options: rank
-%   (default, rank of node size), original (og node size), log (log of node
-%   size)
+%   nodesizemode: the method used to calculate node size. options: log
+%   (default, log of node size), rank (rank of node size), original (og
+%   node size)
 %   colorlabel: label of the color axis (meaning of the color-coding of
 %   nodes), default "x_label".
 %   cmap: colormap. passed on to matlab function `colormap`
 %   labelmethod: how to color code each node based on members' x_labels.
-%   Options: mode (default), mean, median, or none (everything same color).
+%   Options: mode (default), mean, median, none (everything same color), or
+%   a function handle applied as labelmethod(x_label(members)) per node.
+%   nodeclim: [min max] of the color axis for the node colors. Default
+%   [], which uses [min(x_label) max(x_label)].
+%   nodescatter: whether to overlay a scatter plot on top of the graph
+%   nodes (can look cleaner for dense graphs). Default false.
 % output:
 %   h1: axis handle of the plot.
 %   cb: handle of the colorbar of graph
@@ -29,8 +34,11 @@ function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
 %{
 ~ created by MZ, 7/5/2024, adapted from PLOTGRAPHTCM ~
 modifications:
-(6/29/2025) add option to not use scatterplot. correct rank. 
+(6/29/2025) add option to not use scatterplot. correct rank.
 (9/23/2025) edge case clim when there is no color
+(7-19-2026) fix header: nodesizemode's actual default is 'log', not
+'rank' as previously documented; also document 'nodeclim' and
+'nodescatter', which existed but were missing from the parameter list.
 
 %}
 
@@ -97,7 +105,12 @@ h1 = gca;
 if par.nodescatter
     hold on
     [~,idx] = sort(hg.MarkerSize,'ascend'); % --- determine scatter order
-    hs=scatter(hg.XData(idx),hg.YData(idx),hg.MarkerSize(idx).^2,hg.NodeCData(idx),...
+    % reshape to a column: scatter() ambiguously treats an exactly-3-
+    % element ROW color vector as a single RGB triplet rather than
+    % per-point color data, which breaks (errors on redraw) for
+    % exactly-3-node graphs whenever the values fall outside [0,1]. A
+    % column vector is never misinterpreted this way.
+    hs=scatter(hg.XData(idx),hg.YData(idx),hg.MarkerSize(idx).^2,reshape(hg.NodeCData(idx),[],1),...
         'filled','MarkerEdgeColor','k','LineWidth',0.2);
 else
     hs = [];

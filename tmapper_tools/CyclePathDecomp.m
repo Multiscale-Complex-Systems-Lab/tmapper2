@@ -31,6 +31,7 @@ function [allbd,pclusters_nodes,pclusters_interior,pclusters_boundary,...
 %   Tp: M-by-1 vector of cluster assignments of `allupath`.
 % parameters:
 %   clusterthres: threshold of overlap between cycles in the same cluster.
+%   Default 0.5.
 %   plotmat: plot overlap matrix, and cluster assignment for diagnostics.
 %   Default true.
 %   plotmds: plot 2D projection of cycles/paths using MDS. Default false.
@@ -39,6 +40,9 @@ function [allbd,pclusters_nodes,pclusters_interior,pclusters_boundary,...
 %   Default true.
 %{
 ~ Author: Mengsen Zhang <mengsenzhang@gmail.com> 9-3-2020 ~
+modifications:
+(7-19-2026) document clusterthres's default value (0.5), missing from
+the header even though every sibling parameter listed its default.
 %}
 
 p=inputParser;

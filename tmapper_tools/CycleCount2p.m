@@ -14,10 +14,15 @@ function [cycCount,cycLen,cycPath,allcycles] = CycleCount2p(A,varargin)
 %   cycPath: M-by-1 cell array. Each cell contains a Nm-by-Lm matrix, where
 %   Nm is the number of cycles of length Lm. 
 %   allcycles: C-by-1 cell array, each cell contains the path of one cycle.
+% parameters:
+%   simple: whether to only count simple cycles (no repeated nodes other
+%   than the start/end). Default true.
 %{
 ~ Author: Mengsen Zhang <mengsenzhang@gmail.com> 3-23-2020 ~
 modifications:
 (9-1-2020) add output for all cycles in one cell array
+(7-19-2026) document the 'simple' parameter (existed since original
+version but was never listed in the header).
 %}
 
 

@@ -19,6 +19,11 @@ function [clusterIdx] = CycleCluster(allcycles,thres,varargin)
 %   assignment. Default true.
 %{
 ~ Author: Mengsen Zhang <mengsenzhang@gmail.com> 9-1-2020 ~
+modifications:
+(7-19-2026) guard Nc<=1: linkage/cluster are not meaningful for 0 or 1
+observations and previously crashed (0 cycles) or silently returned a
+mismatched-length clusterIdx (1 cycle, corrupting downstream callers
+like CycleClusterConn). Now returns the trivial result directly.
 %}
 
 p=inputParser;
@@ -32,6 +37,12 @@ par=p.Results;
 
 % -- compute overlap between cycles
 Nc=length(allcycles);
+
+if Nc <= 1
+    clusterIdx = ones(Nc,1); % 0 or 1 cycles: nothing meaningful to cluster
+    return
+end
+
 prct_overlap = nan(Nc,Nc);
 
 for ii=1:Nc

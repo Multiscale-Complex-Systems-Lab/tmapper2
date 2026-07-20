@@ -22,9 +22,21 @@ function g = cknngraph(XorD,k,delta,varargin)
 %   g: matlab graph object (unweighted, undirected).
 %{
 created by MZ, 8-20-2019
+modifications:
+(7-19-2026) add input validation for XorD, k, and delta.
 
 %}
 
+% -- validate required inputs
+if ndims(XorD) ~= 2
+    error('cknngraph:invalidInput','XorD must be a 2D matrix.');
+end
+if ~isscalar(k) || k < 1 || k ~= round(k)
+    error('cknngraph:invalidInput','k must be a positive integer scalar.');
+end
+if ~isscalar(delta) || ~isreal(delta) || delta <= 0
+    error('cknngraph:invalidInput','delta must be a positive real scalar.');
+end
 
 % -- check parameters
 p=inputParser;
@@ -41,6 +53,10 @@ else
     D = XorD;
 end
 Nn = length(D); % number of nodes
+
+if k >= Nn
+    error('cknngraph:invalidInput','k must be smaller than the number of points (%d).',Nn);
+end
 
 % -- find nearest neighbors and compute distance
 D_sorted=sort(D,2);

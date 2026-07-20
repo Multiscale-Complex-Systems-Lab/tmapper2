@@ -4,3 +4,12 @@ results/*
 *.RData
 *.Rhistory
 .DS_Store
+*.mex*
+slprj/
+codegen/
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vscode/
+.idea/

@@ -10,7 +10,16 @@ function allupath = Cycles2Paths(allcycles,cutpts)
 %   allupath: M-by-1 cell array, of M paths linking the cutting points. 
 %{
 ~ Author: Mengsen Zhang <mengsenzhang@gmail.com> 9-3-2020 ~
+modifications:
+(7-19-2026) guard empty allcycles: vertcat(allpath{:}) on zero elements
+collapses to a plain empty double instead of staying a cell array,
+breaking the cellfun calls below. Now returns an empty cell directly.
 %}
+
+if isempty(allcycles)
+    allupath = cell(0,1);
+    return
+end
 
 % -- cut all the cycles at the cutting points
 allpath=cellfun(@(x) CycleCutter(x,cutpts),allcycles,'UniformOutput',0);
