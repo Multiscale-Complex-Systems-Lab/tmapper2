@@ -1,0 +1,58 @@
+# =============================================================================
+# .github/workflows/tests.yml
+#
+# Runs the MATLAB regression test suite in tests/ on every push to `main` and
+# on every pull request, so a broken change gets flagged before it merges.
+#
+# Uses MathWorks' official matlab-actions, which provide a temporary MATLAB
+# license for CI on GitHub-hosted runners (free for public repos). Each
+# tests/test_*.m script is a plain, dependency-free MATLAB script (not a
+# matlab.unittest class) that prints "All tests passed." and errors out via
+# assert() on the first failing check -- run-command below just runs each one
+# with run() and reports a pass/fail summary at the end.
+# =============================================================================
+name: Run tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v2
+
+      - name: Run test suite
+        uses: matlab-actions/run-command@v2
+        with:
+          command: |
+            addpath('tmapper_tools');
+            testDir = 'tests';
+            testFiles = dir(fullfile(testDir, 'test_*.m'));
+            results = struct('name', {}, 'passed', {});
+            for i = 1:numel(testFiles)
+                name = testFiles(i).name;
+                fprintf('\n=== %s ===\n', name);
+                try
+                    run(fullfile(testDir, name));
+                    results(end+1) = struct('name', name, 'passed', true); %#ok<SAGROW>
+                catch ME
+                    fprintf(2, 'FAILED: %s\n%s\n', name, getReport(ME));
+                    results(end+1) = struct('name', name, 'passed', false); %#ok<SAGROW>
+                end
+                close all
+            end
+            fprintf('\n=== Summary ===\n');
+            passedCount = sum([results.passed]);
+            fprintf('%d/%d test files passed\n', passedCount, numel(results));
+            if passedCount < numel(results)
+                failedNames = {results(~[results.passed]).name};
+                error('Failing test files: %s', strjoin(failedNames, ', '));
+            end
