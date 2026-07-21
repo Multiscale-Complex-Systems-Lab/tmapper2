@@ -5,7 +5,10 @@
 # on every pull request, so a broken change gets flagged before it merges.
 #
 # Uses MathWorks' official matlab-actions, which provide a temporary MATLAB
-# license for CI on GitHub-hosted runners (free for public repos). Each
+# license for CI on GitHub-hosted runners (free for public repos). The base
+# install does not include the Statistics and Machine Learning Toolbox, which
+# the toolbox depends on (pdist2, squareform/linkage via CycleCluster.m,
+# tiedrank, etc. -- see CLAUDE.md), so it's requested explicitly below. Each
 # tests/test_*.m script is a plain, dependency-free MATLAB script (not a
 # matlab.unittest class) that prints "All tests passed." and errors out via
 # assert() on the first failing check -- run-command below just runs each one
@@ -28,6 +31,8 @@ jobs:
 
       - name: Set up MATLAB
         uses: matlab-actions/setup-matlab@v2
+        with:
+          products: Statistics_and_Machine_Learning_Toolbox
 
       - name: Run test suite
         uses: matlab-actions/run-command@v2
