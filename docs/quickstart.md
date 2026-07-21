@@ -113,6 +113,19 @@ tidx = (1:length(t))';   % integer index per time point, used to define temporal
 4.  **`maxNeighborDist`** — the same cutoff as an absolute distance. When both
     are given, the **smaller** (stricter) threshold is applied.
 
+!!! tip "Which parameters matter most"
+    The four are not equally important. **`k`** is the essential one — it largely
+    determines the topology of the graph, so it is the parameter to explore first.
+    **`texclude`** should be set from your *sampling density* rather than the dynamics:
+    when a signal is sampled quickly, a few consecutive samples reflect the same
+    underlying state rather than genuine recurrence, so they should be excluded from
+    counting as spatial neighbors. For example, `texclude = 5` treats the five samples
+    following each time point as too close in time to be a real recurrence; values under
+    10 are common across most applications. The two distance cutoffs —
+    **`maxNeighborDist`** and **`maxNeighborDistPrct`** — are optional: leave them at
+    their defaults unless you suspect outliers that you want to keep from being linked
+    as neighbors.
+
 The output `g` is a MATLAB `digraph` with one node per time point; `par`
 records the parameters actually used (handy for reading back the resolved
 distance cutoff).
@@ -166,6 +179,22 @@ title(a1, ["sample data", "k=" + k + ", d=" + d, ...
 You should now see the attractor transition network on the left and the
 geodesic recurrence plot on the right — the same figure shown on the
 [home page](index.md).
+
+## How to read the network
+
+At a glance, here is what the figure is showing you:
+
+- **Nodes** are attractors — recurring states the system settles into. A node's
+  **size** reflects how long the system dwells there (its *local stability*).
+- **Edges** are transitions between states, and they are **directed**: the arrow is
+  the direction of time.
+- **Loops** (cycles) are excursions that leave a node and eventually return to it. A
+  loop's **length** — the number of transitions — reflects how easily that state
+  recurs (a measure of *global stability*).
+
+The [Concepts](concepts.md) page unpacks all of this in depth, including what the two
+key parameters (`k` and `d`) really control, what the recurrence plot's distances
+mean, and when the method is applicable.
 
 ## What's next
 

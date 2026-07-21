@@ -1,6 +1,8 @@
 # Temporal Mapper 2
 Here is **Temporal Mapper 2** developed by Mengsen Zhang. This version improves upon the original toolbox by adding a few new parameters to accommodate application across disciplines and data types. While the [original Temporal Mapper](#previous-versions) was designed for fMRI data, it turns out to be also useful to understanding dynamics in other systems and modalities. Thus, Temporal Mapper is designed to be a more general-purpose tool for characterizing complex dynamics. 
 
+**Full documentation, tutorials, and worked examples:** https://multiscale-complex-systems-lab.github.io/tmapper2/
+
 ## How does it work
 Technical details can be found in [the paper](#citation). Briefly, Temporal Mapper is designed to capture attractor (stable state) and phase transitions in high-dimensional dynamical systems as an attractor transition network from only time series data. In the transition network, each node represent an attractor. The weight of the node indicates the local stability of the attractor. Each edge reflect an transition from one attractor to another. The computation takes two steps:
 

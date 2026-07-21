@@ -46,10 +46,20 @@ time point may have) and **`d`** (the compression threshold — loops shorter th
 this are absorbed into a node). The [Quickstart](quickstart.md) walks through
 both on real data.
 
+## Applications
+
+Because it needs only a multivariate time series, Temporal Mapper is not tied to any one
+field. It was introduced and validated on simulated and human **brain dynamics** (fMRI),
+and has since been applied to **social behavior** — the moment-to-moment interpersonal
+dynamics between patient and therapist in psychotherapy, and the naturalistic social behavior
+of freely interacting animals. See [Applications](applications.md) for details and figures.
+
 ## Where to go next
 
 - **[Installation](installation.md)** — add the toolbox to your MATLAB path and check dependencies.
 - **[Quickstart](quickstart.md)** — build your first transition network end to end, reproducing the figure above.
+- **[Concepts](concepts.md)** — what the nodes, edges, and loops mean, and why the two-step construction works.
+- **[Applications](applications.md)** — published examples in brain and social dynamics.
 
 ## Citation
 
@@ -58,3 +68,9 @@ If you use this toolbox in your work, please cite:
 > Zhang, M., Chowdhury, S., & Saggar, M. (2023).
 > [Temporal Mapper: transition networks in simulated and real neural dynamics](https://doi.org/10.1162/netn_a_00301).
 > *Network Neuroscience*, 7(2): 431–460.
+
+For the psychotherapy / social-behavior application, see also:
+
+> Luo, X., & Zhang, M. (2026).
+> [A topological data analysis method for revealing dynamic changes in psychotherapy microprocesses](https://doi.org/10.3389/fpsyg.2025.1711782).
+> *Frontiers in Psychology*, 16: 1711782.
