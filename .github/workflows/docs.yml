@@ -1,0 +1,45 @@
+# =============================================================================
+# .github/workflows/docs.yml
+#
+# Automatically builds the MkDocs site and publishes it to GitHub Pages every
+# time you push to the `main` branch. The built HTML is pushed to a `gh-pages`
+# branch, which GitHub serves at:
+#   https://multiscale-complex-systems-lab.github.io/tmapper2/
+#
+# One-time setup (in the GitHub repo settings, done once by a maintainer):
+#   Settings -> Pages -> "Build and deployment" -> Source: "Deploy from a
+#   branch" -> Branch: gh-pages / (root). The first push to main after this
+#   workflow is added will create the gh-pages branch automatically.
+# =============================================================================
+name: Deploy docs
+
+on:
+  push:
+    branches:
+      - main            # (1) change this if your default branch is named differently
+
+# The job needs write access to push the built site to the gh-pages branch.
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Check out the repository so the workflow can read docs/ and mkdocs.yml
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # 2. Install Python (Material for MkDocs is a Python package)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # 3. Install MkDocs + the Material theme pinned in docs/requirements.txt
+      - name: Install documentation dependencies
+        run: pip install -r docs/requirements.txt
+
+      # 4. Build the site and push it to the gh-pages branch in one command
+      - name: Build and deploy
+        run: mkdocs gh-deploy --force

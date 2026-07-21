@@ -1,0 +1,96 @@
+# =============================================================================
+# mkdocs.yml — configuration for the Temporal Mapper 2 documentation site.
+#
+# This file is read by MkDocs (https://www.mkdocs.org/) together with the
+# "Material for MkDocs" theme (the same theme Pydantic's docs use). It defines
+# the site metadata, the visual theme, which Markdown features are enabled,
+# and the left-hand navigation. The actual page content lives as Markdown
+# files under the `docs/` folder.
+#
+# Preview locally:   mkdocs serve      (then open http://127.0.0.1:8000)
+# Build static site: mkdocs build      (outputs to ./site)
+# =============================================================================
+
+# --- Site identity ----------------------------------------------------------
+site_name: Temporal Mapper 2
+site_description: >-
+  Build attractor transition networks from time-series data — a Mapper-style
+  MATLAB toolbox for characterizing complex dynamics.
+site_author: Mengsen Zhang
+
+# The public URL the site will live at once GitHub Pages is enabled.
+# (username/org is lowercased by GitHub Pages.)
+site_url: https://multiscale-complex-systems-lab.github.io/tmapper2/
+
+# --- Link back to the source repository -------------------------------------
+# These power the GitHub icon in the header and the "edit this page" pencil.
+repo_name: Multiscale-Complex-Systems-Lab/tmapper2
+repo_url: https://github.com/Multiscale-Complex-Systems-Lab/tmapper2
+edit_uri: edit/main/docs/            # points the pencil at the main branch
+
+# --- Theme -------------------------------------------------------------------
+theme:
+  name: material
+  # Two palettes give the light/dark toggle you liked on the Pydantic site.
+  palette:
+    - media: "(prefers-color-scheme: light)"   # light mode
+      scheme: default
+      primary: pink                            # Pydantic's signature accent
+      accent: pink
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"     # dark mode
+      scheme: slate
+      primary: pink
+      accent: pink
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant     # SPA-like instant page loads
+    - navigation.tracking    # URL updates as you scroll
+    - navigation.sections    # group pages into sections in the sidebar
+    - navigation.top         # "back to top" button
+    - toc.follow             # right-hand table of contents follows scroll
+    - content.code.copy      # copy button on every code block
+    - content.code.annotate  # the little (1) numbered code annotations
+    - search.suggest         # autocomplete in the search box
+    - search.highlight       # highlight the matched term on the page
+  icon:
+    repo: fontawesome/brands/github
+
+# --- Markdown extensions -----------------------------------------------------
+# These unlock the richer content elements (callout boxes, tabbed panels,
+# syntax-highlighted code, code annotations) that give the Pydantic-style feel.
+markdown_extensions:
+  - admonition                 # the colored note/warning/tip callout boxes
+  - footnotes                  # citation-style [^ref] footnotes used on the Concepts/Applications pages
+  - pymdownx.details           # make those callouts collapsible
+  - pymdownx.superfences       # nestable fenced code blocks
+  - pymdownx.highlight:        # Pygments syntax highlighting (supports matlab)
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite      # inline `code` highlighting
+  - pymdownx.snippets          # include external files into a page
+  - pymdownx.tabbed:           # the tabbed content panels
+      alternate_style: true
+  - pymdownx.blocks.caption    # figure captions (the /// caption ... /// block)
+  - attr_list                  # add attributes/classes to Markdown elements
+  - md_in_html
+  - toc:
+      permalink: true          # the "¶" anchor link on each heading
+
+# --- Plugins -----------------------------------------------------------------
+plugins:
+  - search                     # built-in client-side search
+
+# --- Navigation (left sidebar) ----------------------------------------------
+# This is the skeleton. We add pages here as we write them.
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quickstart: quickstart.md
+  - Concepts: concepts.md
+  - Applications: applications.md
