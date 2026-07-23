@@ -143,6 +143,14 @@ classdef TemporalMapperApp < matlab.apps.AppBase
                 'nodesizemode', app.NodeSizeModeDropDown.Value, ...
                 'labelmethod', app.LabelMethodDropDown.Value, ...
                 'colorlabel', colorlabel);
+            % axis('equal') alone lets MATLAB stretch the axis LIMITS
+            % (not just the rendered box) to match the axes' own w:h
+            % ratio when it isn't perfectly square, leaving wide blank
+            % margins on whichever side that stretch fell on. 'tight'
+            % afterward re-hugs the limits to the actual plotted data,
+            % while 'equal' (already set inside plottmgraph) keeps the
+            % 1:1 aspect so the network isn't visually distorted.
+            axis(app.NetworkAxes,'tight')
             title(app.NetworkAxes, sprintf('k=%g, d=%g, texclude=%g, maxdist=%.4g', ...
                 k, d, texclude, par.maxNeighborDist));
 
@@ -295,6 +303,8 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             app.PlotPanel.Layout.Column = 2;
 
             app.PlotGrid = uigridlayout(app.PlotPanel, [1 2]);
+            app.PlotGrid.Padding = [2 2 2 2];
+            app.PlotGrid.ColumnSpacing = 4;
 
             app.NetworkAxes = uiaxes(app.PlotGrid);
             app.NetworkAxes.Layout.Row = 1; app.NetworkAxes.Layout.Column = 1;
