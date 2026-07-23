@@ -20,6 +20,11 @@ classdef TemporalMapperApp < matlab.apps.AppBase
     modifications:
     (7-23-2026) add z-score checkbox (was always-on) and a "Select All"
     button for the variable list.
+    (7-23-2026) add delay-embedding lag/order fields, matching
+    tmapper_demo.m's "quick and dirty delay embedding" -- concatenates
+    'order' copies of the state, each 'lag' time points apart, to
+    reveal cyclic/recurrent structure not visible in the raw variables
+    alone. order=1 (default) skips embedding, matching prior behavior.
     %}
 
     properties (Access = public)
@@ -36,6 +41,10 @@ classdef TemporalMapperApp < matlab.apps.AppBase
         SelectAllButton     matlab.ui.control.Button
         VariableListBox     matlab.ui.control.ListBox
         ZscoreCheckBox      matlab.ui.control.CheckBox
+        EmbedLagLabel       matlab.ui.control.Label
+        EmbedLagEditField   matlab.ui.control.NumericEditField
+        EmbedOrderLabel     matlab.ui.control.Label
+        EmbedOrderEditField matlab.ui.control.NumericEditField
         ColorVarLabel       matlab.ui.control.Label
         ColorVarDropDown    matlab.ui.control.DropDown
         TimeVarLabel        matlab.ui.control.Label
@@ -108,11 +117,43 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             end
 
             if app.ZscoreCheckBox.Value
-                X = zscore(app.DataTable{:,selectedVars});
+                X_raw = zscore(app.DataTable{:,selectedVars});
             else
-                X = app.DataTable{:,selectedVars};
+                X_raw = app.DataTable{:,selectedVars};
             end
-            N = size(X,1);
+            N_raw = size(X_raw,1);
+
+            % -- delay embedding: concatenate 'order' copies of the state,
+            % each 'lag' time points apart, e.g. [x(t-lag), x(t)] for
+            % order=2. This is what reveals cyclic/recurrent structure
+            % that isn't visible in the raw variables alone (see
+            % tmapper_demo.m's "quick and dirty delay embedding"). The
+            % default order=1 skips this and passes X_raw through as-is.
+            lag = app.EmbedLagEditField.Value;
+            order = app.EmbedOrderEditField.Value;
+            if order > 1
+                if lag < 1
+                    error('TemporalMapperApp:invalidEmbed', ...
+                        'Embed lag must be at least 1 when embed order > 1.');
+                end
+                N = N_raw - (order-1)*lag;
+                if N < 2
+                    error('TemporalMapperApp:invalidEmbed', ...
+                        'Embed lag/order too large: only %d rows of data available.', N_raw);
+                end
+                nvars = size(X_raw,2);
+                X = zeros(N, nvars*order);
+                for j = 1:order
+                    X(:, (j-1)*nvars + (1:nvars)) = X_raw((j-1)*lag + (1:N), :);
+                end
+            else
+                N = N_raw;
+                X = X_raw;
+            end
+            % original rows aligned with each embedded state (the most
+            % recent slice, since embedding above stacks past->present)
+            rows = (N_raw-N+1):N_raw;
+
             tidx = (1:N)';
             D = pdist2(X,X,'minkowski',2);
 
@@ -134,7 +175,7 @@ classdef TemporalMapperApp < matlab.apps.AppBase
                 colorvar = tidx;
                 colorlabel = 'row index';
             else
-                colorvar = app.DataTable.(app.ColorVarDropDown.Value);
+                colorvar = app.DataTable.(app.ColorVarDropDown.Value)(rows);
                 colorlabel = app.ColorVarDropDown.Value;
             end
 
@@ -142,7 +183,7 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             if strcmp(app.TimeVarDropDown.Value, '(row index)')
                 t = tidx;
             else
-                t = app.DataTable.(app.TimeVarDropDown.Value);
+                t = app.DataTable.(app.TimeVarDropDown.Value)(rows);
             end
 
             cla(app.NetworkAxes)
@@ -160,8 +201,13 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             % while 'equal' (already set inside plottmgraph) keeps the
             % 1:1 aspect so the network isn't visually distorted.
             axis(app.NetworkAxes,'tight')
-            title(app.NetworkAxes, sprintf('k=%g, d=%g, texclude=%g, maxdist=%.4g', ...
-                k, d, texclude, par.maxNeighborDist));
+            if order > 1
+                title(app.NetworkAxes, sprintf('k=%g, d=%g, texclude=%g, maxdist=%.4g, lag=%g, order=%g', ...
+                    k, d, texclude, par.maxNeighborDist, lag, order));
+            else
+                title(app.NetworkAxes, sprintf('k=%g, d=%g, texclude=%g, maxdist=%.4g', ...
+                    k, d, texclude, par.maxNeighborDist));
+            end
 
             nodesizevec = cellfun(@length, members);
             bsingle = all(nodesizevec==1);
@@ -233,8 +279,8 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             app.ControlPanel.Layout.Row = 1;
             app.ControlPanel.Layout.Column = 1;
 
-            app.ControlGrid = uigridlayout(app.ControlPanel, [19 2]);
-            app.ControlGrid.RowHeight = {32,24,20,22,150,26,26,26,26,26,26,26,26,26,26,26,34,18,'1x'};
+            app.ControlGrid = uigridlayout(app.ControlPanel, [21 2]);
+            app.ControlGrid.RowHeight = {32,24,20,22,150,26,26,26,26,26,26,26,26,26,26,26,26,26,34,18,'1x'};
             app.ControlGrid.ColumnWidth = {120,'1x'};
             app.ControlGrid.RowSpacing = 4;
 
@@ -258,64 +304,74 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             app.ZscoreCheckBox = uicheckbox(app.ControlGrid, 'Text','z-score variables before building network', 'Value',true);
             app.ZscoreCheckBox.Layout.Row = 6; app.ZscoreCheckBox.Layout.Column = [1 2];
 
+            app.EmbedLagLabel = uilabel(app.ControlGrid, 'Text','embed lag:');
+            app.EmbedLagLabel.Layout.Row = 7; app.EmbedLagLabel.Layout.Column = 1;
+            app.EmbedLagEditField = uieditfield(app.ControlGrid,'numeric', 'Value',0, 'Limits',[0 Inf], 'RoundFractionalValues','on');
+            app.EmbedLagEditField.Layout.Row = 7; app.EmbedLagEditField.Layout.Column = 2;
+
+            app.EmbedOrderLabel = uilabel(app.ControlGrid, 'Text','embed order:');
+            app.EmbedOrderLabel.Layout.Row = 8; app.EmbedOrderLabel.Layout.Column = 1;
+            app.EmbedOrderEditField = uieditfield(app.ControlGrid,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
+            app.EmbedOrderEditField.Layout.Row = 8; app.EmbedOrderEditField.Layout.Column = 2;
+
             app.ColorVarLabel = uilabel(app.ControlGrid, 'Text','Color by:');
-            app.ColorVarLabel.Layout.Row = 7; app.ColorVarLabel.Layout.Column = 1;
+            app.ColorVarLabel.Layout.Row = 9; app.ColorVarLabel.Layout.Column = 1;
             app.ColorVarDropDown = uidropdown(app.ControlGrid, 'Items',{'(row index)'});
-            app.ColorVarDropDown.Layout.Row = 7; app.ColorVarDropDown.Layout.Column = 2;
+            app.ColorVarDropDown.Layout.Row = 9; app.ColorVarDropDown.Layout.Column = 2;
 
             app.TimeVarLabel = uilabel(app.ControlGrid, 'Text','Time axis:');
-            app.TimeVarLabel.Layout.Row = 8; app.TimeVarLabel.Layout.Column = 1;
+            app.TimeVarLabel.Layout.Row = 10; app.TimeVarLabel.Layout.Column = 1;
             app.TimeVarDropDown = uidropdown(app.ControlGrid, 'Items',{'(row index)'});
-            app.TimeVarDropDown.Layout.Row = 8; app.TimeVarDropDown.Layout.Column = 2;
+            app.TimeVarDropDown.Layout.Row = 10; app.TimeVarDropDown.Layout.Column = 2;
 
             app.KLabel = uilabel(app.ControlGrid, 'Text','k (neighbors):');
-            app.KLabel.Layout.Row = 9; app.KLabel.Layout.Column = 1;
+            app.KLabel.Layout.Row = 11; app.KLabel.Layout.Column = 1;
             app.KEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.KEditField.Layout.Row = 9; app.KEditField.Layout.Column = 2;
+            app.KEditField.Layout.Row = 11; app.KEditField.Layout.Column = 2;
 
             app.DLabel = uilabel(app.ControlGrid, 'Text','d (compression):');
-            app.DLabel.Layout.Row = 10; app.DLabel.Layout.Column = 1;
+            app.DLabel.Layout.Row = 12; app.DLabel.Layout.Column = 1;
             app.DEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.DEditField.Layout.Row = 10; app.DEditField.Layout.Column = 2;
+            app.DEditField.Layout.Row = 12; app.DEditField.Layout.Column = 2;
 
             app.TExcludeLabel = uilabel(app.ControlGrid, 'Text','texclude:');
-            app.TExcludeLabel.Layout.Row = 11; app.TExcludeLabel.Layout.Column = 1;
+            app.TExcludeLabel.Layout.Row = 13; app.TExcludeLabel.Layout.Column = 1;
             app.TExcludeEditField = uieditfield(app.ControlGrid,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.TExcludeEditField.Layout.Row = 11; app.TExcludeEditField.Layout.Column = 2;
+            app.TExcludeEditField.Layout.Row = 13; app.TExcludeEditField.Layout.Column = 2;
 
             app.MaxDistPrctLabel = uilabel(app.ControlGrid, 'Text','max dist percentile:');
-            app.MaxDistPrctLabel.Layout.Row = 12; app.MaxDistPrctLabel.Layout.Column = 1;
+            app.MaxDistPrctLabel.Layout.Row = 14; app.MaxDistPrctLabel.Layout.Column = 1;
             app.MaxDistPrctEditField = uieditfield(app.ControlGrid,'numeric', 'Value',100, 'Limits',[0 100]);
-            app.MaxDistPrctEditField.Layout.Row = 12; app.MaxDistPrctEditField.Layout.Column = 2;
+            app.MaxDistPrctEditField.Layout.Row = 14; app.MaxDistPrctEditField.Layout.Column = 2;
 
             app.MaxDistLabel = uilabel(app.ControlGrid, 'Text','max dist (absolute):');
-            app.MaxDistLabel.Layout.Row = 13; app.MaxDistLabel.Layout.Column = 1;
+            app.MaxDistLabel.Layout.Row = 15; app.MaxDistLabel.Layout.Column = 1;
             app.MaxDistEditField = uieditfield(app.ControlGrid,'numeric', 'Value',Inf, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.MaxDistEditField.Layout.Row = 13; app.MaxDistEditField.Layout.Column = 2;
+            app.MaxDistEditField.Layout.Row = 15; app.MaxDistEditField.Layout.Column = 2;
 
             app.ReciprocalCheckBox = uicheckbox(app.ControlGrid, 'Text','reciprocal', 'Value',true);
-            app.ReciprocalCheckBox.Layout.Row = 14; app.ReciprocalCheckBox.Layout.Column = [1 2];
+            app.ReciprocalCheckBox.Layout.Row = 16; app.ReciprocalCheckBox.Layout.Column = [1 2];
 
             app.NodeSizeModeLabel = uilabel(app.ControlGrid, 'Text','Node size mode:');
-            app.NodeSizeModeLabel.Layout.Row = 15; app.NodeSizeModeLabel.Layout.Column = 1;
+            app.NodeSizeModeLabel.Layout.Row = 17; app.NodeSizeModeLabel.Layout.Column = 1;
             app.NodeSizeModeDropDown = uidropdown(app.ControlGrid, 'Items',{'log','rank','original'});
-            app.NodeSizeModeDropDown.Layout.Row = 15; app.NodeSizeModeDropDown.Layout.Column = 2;
+            app.NodeSizeModeDropDown.Layout.Row = 17; app.NodeSizeModeDropDown.Layout.Column = 2;
 
             app.LabelMethodLabel = uilabel(app.ControlGrid, 'Text','Label method:');
-            app.LabelMethodLabel.Layout.Row = 16; app.LabelMethodLabel.Layout.Column = 1;
+            app.LabelMethodLabel.Layout.Row = 18; app.LabelMethodLabel.Layout.Column = 1;
             app.LabelMethodDropDown = uidropdown(app.ControlGrid, 'Items',{'mode','mean','median','none'});
-            app.LabelMethodDropDown.Layout.Row = 16; app.LabelMethodDropDown.Layout.Column = 2;
+            app.LabelMethodDropDown.Layout.Row = 18; app.LabelMethodDropDown.Layout.Column = 2;
 
             app.BuildButton = uibutton(app.ControlGrid, 'Text','Build Network', ...
                 'BackgroundColor',[0.31 0.60 0.95], 'FontColor','white', 'FontWeight','bold', ...
                 'ButtonPushedFcn', @(btn,event) BuildButtonPushed(app));
-            app.BuildButton.Layout.Row = 17; app.BuildButton.Layout.Column = [1 2];
+            app.BuildButton.Layout.Row = 19; app.BuildButton.Layout.Column = [1 2];
 
             app.StatusLabel = uilabel(app.ControlGrid, 'Text','Status:');
-            app.StatusLabel.Layout.Row = 18; app.StatusLabel.Layout.Column = [1 2];
+            app.StatusLabel.Layout.Row = 20; app.StatusLabel.Layout.Column = [1 2];
 
             app.StatusTextArea = uitextarea(app.ControlGrid, 'Value',{'Load a data file to get started.'}, 'Editable','off');
-            app.StatusTextArea.Layout.Row = 19; app.StatusTextArea.Layout.Column = [1 2];
+            app.StatusTextArea.Layout.Row = 21; app.StatusTextArea.Layout.Column = [1 2];
 
             % ================= right: plot panel =================
             app.PlotPanel = uipanel(app.GridLayout, 'Title','Network');
