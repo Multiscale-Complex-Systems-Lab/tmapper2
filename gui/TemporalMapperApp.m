@@ -17,6 +17,9 @@ classdef TemporalMapperApp < matlab.apps.AppBase
     %
     %{
     created by MZ (with Claude Code), 7-23-2026
+    modifications:
+    (7-23-2026) add z-score checkbox (was always-on) and a "Select All"
+    button for the variable list.
     %}
 
     properties (Access = public)
@@ -30,7 +33,9 @@ classdef TemporalMapperApp < matlab.apps.AppBase
         LoadDataButton      matlab.ui.control.Button
         FileLabel           matlab.ui.control.Label
         VariablesLabel      matlab.ui.control.Label
+        SelectAllButton     matlab.ui.control.Button
         VariableListBox     matlab.ui.control.ListBox
+        ZscoreCheckBox      matlab.ui.control.CheckBox
         ColorVarLabel       matlab.ui.control.Label
         ColorVarDropDown    matlab.ui.control.DropDown
         TimeVarLabel        matlab.ui.control.Label
@@ -102,7 +107,11 @@ classdef TemporalMapperApp < matlab.apps.AppBase
                 error('TemporalMapperApp:noVars','Select at least one variable to build the network from.');
             end
 
-            X = zscore(app.DataTable{:,selectedVars});
+            if app.ZscoreCheckBox.Value
+                X = zscore(app.DataTable{:,selectedVars});
+            else
+                X = app.DataTable{:,selectedVars};
+            end
             N = size(X,1);
             tidx = (1:N)';
             D = pdist2(X,X,'minkowski',2);
@@ -205,6 +214,10 @@ classdef TemporalMapperApp < matlab.apps.AppBase
                 app.StatusTextArea.Value = {['Error: ' ME.message]};
             end
         end
+
+        function SelectAllButtonPushed(app, ~)
+            app.VariableListBox.Value = app.VariableListBox.Items;
+        end
     end
 
     methods (Access = private)
@@ -220,8 +233,8 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             app.ControlPanel.Layout.Row = 1;
             app.ControlPanel.Layout.Column = 1;
 
-            app.ControlGrid = uigridlayout(app.ControlPanel, [17 2]);
-            app.ControlGrid.RowHeight = {32,24,20,150,26,26,26,26,26,26,26,26,26,26,34,18,'1x'};
+            app.ControlGrid = uigridlayout(app.ControlPanel, [19 2]);
+            app.ControlGrid.RowHeight = {32,24,20,22,150,26,26,26,26,26,26,26,26,26,26,26,34,18,'1x'};
             app.ControlGrid.ColumnWidth = {120,'1x'};
             app.ControlGrid.RowSpacing = 4;
 
@@ -235,67 +248,74 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             app.VariablesLabel = uilabel(app.ControlGrid, 'Text','Variables (ctrl/shift-click to select multiple):');
             app.VariablesLabel.Layout.Row = 3; app.VariablesLabel.Layout.Column = [1 2];
 
+            app.SelectAllButton = uibutton(app.ControlGrid, 'Text','Select All', ...
+                'ButtonPushedFcn', @(btn,event) SelectAllButtonPushed(app));
+            app.SelectAllButton.Layout.Row = 4; app.SelectAllButton.Layout.Column = 2;
+
             app.VariableListBox = uilistbox(app.ControlGrid, 'Items',{}, 'Multiselect','on');
-            app.VariableListBox.Layout.Row = 4; app.VariableListBox.Layout.Column = [1 2];
+            app.VariableListBox.Layout.Row = 5; app.VariableListBox.Layout.Column = [1 2];
+
+            app.ZscoreCheckBox = uicheckbox(app.ControlGrid, 'Text','z-score variables before building network', 'Value',true);
+            app.ZscoreCheckBox.Layout.Row = 6; app.ZscoreCheckBox.Layout.Column = [1 2];
 
             app.ColorVarLabel = uilabel(app.ControlGrid, 'Text','Color by:');
-            app.ColorVarLabel.Layout.Row = 5; app.ColorVarLabel.Layout.Column = 1;
+            app.ColorVarLabel.Layout.Row = 7; app.ColorVarLabel.Layout.Column = 1;
             app.ColorVarDropDown = uidropdown(app.ControlGrid, 'Items',{'(row index)'});
-            app.ColorVarDropDown.Layout.Row = 5; app.ColorVarDropDown.Layout.Column = 2;
+            app.ColorVarDropDown.Layout.Row = 7; app.ColorVarDropDown.Layout.Column = 2;
 
             app.TimeVarLabel = uilabel(app.ControlGrid, 'Text','Time axis:');
-            app.TimeVarLabel.Layout.Row = 6; app.TimeVarLabel.Layout.Column = 1;
+            app.TimeVarLabel.Layout.Row = 8; app.TimeVarLabel.Layout.Column = 1;
             app.TimeVarDropDown = uidropdown(app.ControlGrid, 'Items',{'(row index)'});
-            app.TimeVarDropDown.Layout.Row = 6; app.TimeVarDropDown.Layout.Column = 2;
+            app.TimeVarDropDown.Layout.Row = 8; app.TimeVarDropDown.Layout.Column = 2;
 
             app.KLabel = uilabel(app.ControlGrid, 'Text','k (neighbors):');
-            app.KLabel.Layout.Row = 7; app.KLabel.Layout.Column = 1;
+            app.KLabel.Layout.Row = 9; app.KLabel.Layout.Column = 1;
             app.KEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.KEditField.Layout.Row = 7; app.KEditField.Layout.Column = 2;
+            app.KEditField.Layout.Row = 9; app.KEditField.Layout.Column = 2;
 
             app.DLabel = uilabel(app.ControlGrid, 'Text','d (compression):');
-            app.DLabel.Layout.Row = 8; app.DLabel.Layout.Column = 1;
+            app.DLabel.Layout.Row = 10; app.DLabel.Layout.Column = 1;
             app.DEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.DEditField.Layout.Row = 8; app.DEditField.Layout.Column = 2;
+            app.DEditField.Layout.Row = 10; app.DEditField.Layout.Column = 2;
 
             app.TExcludeLabel = uilabel(app.ControlGrid, 'Text','texclude:');
-            app.TExcludeLabel.Layout.Row = 9; app.TExcludeLabel.Layout.Column = 1;
+            app.TExcludeLabel.Layout.Row = 11; app.TExcludeLabel.Layout.Column = 1;
             app.TExcludeEditField = uieditfield(app.ControlGrid,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.TExcludeEditField.Layout.Row = 9; app.TExcludeEditField.Layout.Column = 2;
+            app.TExcludeEditField.Layout.Row = 11; app.TExcludeEditField.Layout.Column = 2;
 
             app.MaxDistPrctLabel = uilabel(app.ControlGrid, 'Text','max dist percentile:');
-            app.MaxDistPrctLabel.Layout.Row = 10; app.MaxDistPrctLabel.Layout.Column = 1;
+            app.MaxDistPrctLabel.Layout.Row = 12; app.MaxDistPrctLabel.Layout.Column = 1;
             app.MaxDistPrctEditField = uieditfield(app.ControlGrid,'numeric', 'Value',100, 'Limits',[0 100]);
-            app.MaxDistPrctEditField.Layout.Row = 10; app.MaxDistPrctEditField.Layout.Column = 2;
+            app.MaxDistPrctEditField.Layout.Row = 12; app.MaxDistPrctEditField.Layout.Column = 2;
 
             app.MaxDistLabel = uilabel(app.ControlGrid, 'Text','max dist (absolute):');
-            app.MaxDistLabel.Layout.Row = 11; app.MaxDistLabel.Layout.Column = 1;
+            app.MaxDistLabel.Layout.Row = 13; app.MaxDistLabel.Layout.Column = 1;
             app.MaxDistEditField = uieditfield(app.ControlGrid,'numeric', 'Value',Inf, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.MaxDistEditField.Layout.Row = 11; app.MaxDistEditField.Layout.Column = 2;
+            app.MaxDistEditField.Layout.Row = 13; app.MaxDistEditField.Layout.Column = 2;
 
             app.ReciprocalCheckBox = uicheckbox(app.ControlGrid, 'Text','reciprocal', 'Value',true);
-            app.ReciprocalCheckBox.Layout.Row = 12; app.ReciprocalCheckBox.Layout.Column = [1 2];
+            app.ReciprocalCheckBox.Layout.Row = 14; app.ReciprocalCheckBox.Layout.Column = [1 2];
 
             app.NodeSizeModeLabel = uilabel(app.ControlGrid, 'Text','Node size mode:');
-            app.NodeSizeModeLabel.Layout.Row = 13; app.NodeSizeModeLabel.Layout.Column = 1;
+            app.NodeSizeModeLabel.Layout.Row = 15; app.NodeSizeModeLabel.Layout.Column = 1;
             app.NodeSizeModeDropDown = uidropdown(app.ControlGrid, 'Items',{'log','rank','original'});
-            app.NodeSizeModeDropDown.Layout.Row = 13; app.NodeSizeModeDropDown.Layout.Column = 2;
+            app.NodeSizeModeDropDown.Layout.Row = 15; app.NodeSizeModeDropDown.Layout.Column = 2;
 
             app.LabelMethodLabel = uilabel(app.ControlGrid, 'Text','Label method:');
-            app.LabelMethodLabel.Layout.Row = 14; app.LabelMethodLabel.Layout.Column = 1;
+            app.LabelMethodLabel.Layout.Row = 16; app.LabelMethodLabel.Layout.Column = 1;
             app.LabelMethodDropDown = uidropdown(app.ControlGrid, 'Items',{'mode','mean','median','none'});
-            app.LabelMethodDropDown.Layout.Row = 14; app.LabelMethodDropDown.Layout.Column = 2;
+            app.LabelMethodDropDown.Layout.Row = 16; app.LabelMethodDropDown.Layout.Column = 2;
 
             app.BuildButton = uibutton(app.ControlGrid, 'Text','Build Network', ...
                 'BackgroundColor',[0.31 0.60 0.95], 'FontColor','white', 'FontWeight','bold', ...
                 'ButtonPushedFcn', @(btn,event) BuildButtonPushed(app));
-            app.BuildButton.Layout.Row = 15; app.BuildButton.Layout.Column = [1 2];
+            app.BuildButton.Layout.Row = 17; app.BuildButton.Layout.Column = [1 2];
 
             app.StatusLabel = uilabel(app.ControlGrid, 'Text','Status:');
-            app.StatusLabel.Layout.Row = 16; app.StatusLabel.Layout.Column = [1 2];
+            app.StatusLabel.Layout.Row = 18; app.StatusLabel.Layout.Column = [1 2];
 
             app.StatusTextArea = uitextarea(app.ControlGrid, 'Value',{'Load a data file to get started.'}, 'Editable','off');
-            app.StatusTextArea.Layout.Row = 17; app.StatusTextArea.Layout.Column = [1 2];
+            app.StatusTextArea.Layout.Row = 19; app.StatusTextArea.Layout.Column = [1 2];
 
             % ================= right: plot panel =================
             app.PlotPanel = uipanel(app.GridLayout, 'Title','Network');
