@@ -34,6 +34,11 @@ classdef TemporalMapperApp < matlab.apps.AppBase
     data. Also fixes a RowHeight/row-count mismatch from the previous
     change that had silently misassigned heights to several rows below
     "Color by".
+    (7-23-2026) rework the main layout: Setup panel now sits horizontal
+    across the top (its controls split into 5 side-by-side sections
+    that each keep the original label|field grouping, just narrower/
+    shorter) instead of a tall left sidebar, giving Network/Recurrence
+    the bulk of the window instead of half of it.
     %}
 
     properties (Access = public)
@@ -393,122 +398,165 @@ classdef TemporalMapperApp < matlab.apps.AppBase
     methods (Access = private)
 
         function createComponents(app)
-            app.UIFigure = uifigure('Name','Temporal Mapper','Position',[100 100 1150 680]);
+            app.UIFigure = uifigure('Name','Temporal Mapper','Position',[100 100 1250 800]);
 
-            app.GridLayout = uigridlayout(app.UIFigure, [1 2]);
-            app.GridLayout.ColumnWidth = {330, '1x'};
+            % top: setup (horizontal); bottom: network (gets the bulk of
+            % the window, since the plots benefit from space far more
+            % than the mostly-text/short-field setup controls do)
+            app.GridLayout = uigridlayout(app.UIFigure, [2 1]);
+            app.GridLayout.RowHeight = {250, '1x'};
 
-            % ================= left: control panel =================
+            % ================= top: control panel =================
             app.ControlPanel = uipanel(app.GridLayout, 'Title','Setup');
             app.ControlPanel.Layout.Row = 1;
             app.ControlPanel.Layout.Column = 1;
 
-            app.ControlGrid = uigridlayout(app.ControlPanel, [23 2]);
-            app.ControlGrid.RowHeight = {32,32,24,20,22,150,26,26,26,26,26,26,26,26,26,26,26,26,26,26,34,18,'1x'};
-            app.ControlGrid.ColumnWidth = {120,'1x'};
-            app.ControlGrid.RowSpacing = 4;
+            % top-level control layout: 5 side-by-side sections, each an
+            % independent nested grid so a section's own controls keep
+            % the same label|field layout/grouping the original single
+            % vertical column used, just narrower and much shorter.
+            app.ControlGrid = uigridlayout(app.ControlPanel, [1 5]);
+            app.ControlGrid.ColumnWidth = {'1x','1x','1x','1.2x','1x'};
+            app.ControlGrid.ColumnSpacing = 12;
 
-            app.LoadDataButton = uibutton(app.ControlGrid, 'Text','Load Data...', ...
+            % --- section 1: data ---
+            secData = uigridlayout(app.ControlGrid, [3 1]);
+            secData.Layout.Row = 1; secData.Layout.Column = 1;
+            secData.RowHeight = {32,32,'1x'};
+            secData.Padding = [0 0 0 0];
+
+            app.LoadDataButton = uibutton(secData, 'Text','Load Data...', ...
                 'ButtonPushedFcn', @(btn,event) LoadDataButtonPushed(app));
-            app.LoadDataButton.Layout.Row = 1; app.LoadDataButton.Layout.Column = [1 2];
+            app.LoadDataButton.Layout.Row = 1; app.LoadDataButton.Layout.Column = 1;
 
-            app.LoadWorkspaceButton = uibutton(app.ControlGrid, 'Text','Load from Workspace...', ...
+            app.LoadWorkspaceButton = uibutton(secData, 'Text','Load from Workspace...', ...
                 'ButtonPushedFcn', @(btn,event) LoadWorkspaceButtonPushed(app));
-            app.LoadWorkspaceButton.Layout.Row = 2; app.LoadWorkspaceButton.Layout.Column = [1 2];
+            app.LoadWorkspaceButton.Layout.Row = 2; app.LoadWorkspaceButton.Layout.Column = 1;
 
-            app.FileLabel = uilabel(app.ControlGrid, 'Text','No file loaded.');
-            app.FileLabel.Layout.Row = 3; app.FileLabel.Layout.Column = [1 2];
+            app.FileLabel = uilabel(secData, 'Text','No file loaded.');
+            app.FileLabel.Layout.Row = 3; app.FileLabel.Layout.Column = 1;
 
-            app.VariablesLabel = uilabel(app.ControlGrid, 'Text','Variables (ctrl/shift-click to select multiple):');
-            app.VariablesLabel.Layout.Row = 4; app.VariablesLabel.Layout.Column = [1 2];
+            % --- section 2: variables ---
+            secVars = uigridlayout(app.ControlGrid, [3 2]);
+            secVars.Layout.Row = 1; secVars.Layout.Column = 2;
+            secVars.RowHeight = {20,'1x',26};
+            secVars.Padding = [0 0 0 0];
 
-            app.SelectAllButton = uibutton(app.ControlGrid, 'Text','Select All', ...
+            app.VariablesLabel = uilabel(secVars, 'Text','Variables:', ...
+                'Tooltip','Ctrl/shift-click to select multiple.');
+            app.VariablesLabel.Layout.Row = 1; app.VariablesLabel.Layout.Column = 1;
+
+            app.SelectAllButton = uibutton(secVars, 'Text','Select All', ...
                 'ButtonPushedFcn', @(btn,event) SelectAllButtonPushed(app));
-            app.SelectAllButton.Layout.Row = 5; app.SelectAllButton.Layout.Column = 2;
+            app.SelectAllButton.Layout.Row = 1; app.SelectAllButton.Layout.Column = 2;
 
-            app.VariableListBox = uilistbox(app.ControlGrid, 'Items',{}, 'Multiselect','on');
-            app.VariableListBox.Layout.Row = 6; app.VariableListBox.Layout.Column = [1 2];
+            app.VariableListBox = uilistbox(secVars, 'Items',{}, 'Multiselect','on');
+            app.VariableListBox.Layout.Row = 2; app.VariableListBox.Layout.Column = [1 2];
 
-            app.ZscoreCheckBox = uicheckbox(app.ControlGrid, 'Text','z-score variables before building network', 'Value',true);
-            app.ZscoreCheckBox.Layout.Row = 7; app.ZscoreCheckBox.Layout.Column = [1 2];
+            app.ZscoreCheckBox = uicheckbox(secVars, 'Text','z-score variables', 'Value',true, ...
+                'Tooltip','Z-score variables before building network.');
+            app.ZscoreCheckBox.Layout.Row = 3; app.ZscoreCheckBox.Layout.Column = [1 2];
 
-            app.EmbedLagLabel = uilabel(app.ControlGrid, 'Text','embed lag:');
-            app.EmbedLagLabel.Layout.Row = 8; app.EmbedLagLabel.Layout.Column = 1;
-            app.EmbedLagEditField = uieditfield(app.ControlGrid,'numeric', 'Value',0, 'Limits',[0 Inf], 'RoundFractionalValues','on');
-            app.EmbedLagEditField.Layout.Row = 8; app.EmbedLagEditField.Layout.Column = 2;
+            % --- section 3: color, time axis & delay embedding ---
+            secColor = uigridlayout(app.ControlGrid, [5 2]);
+            secColor.Layout.Row = 1; secColor.Layout.Column = 3;
+            secColor.RowHeight = {26,26,26,26,26};
+            secColor.ColumnWidth = {80,'1x'};
+            secColor.Padding = [0 0 0 0];
 
-            app.EmbedOrderLabel = uilabel(app.ControlGrid, 'Text','embed order:');
-            app.EmbedOrderLabel.Layout.Row = 9; app.EmbedOrderLabel.Layout.Column = 1;
-            app.EmbedOrderEditField = uieditfield(app.ControlGrid,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.EmbedOrderEditField.Layout.Row = 9; app.EmbedOrderEditField.Layout.Column = 2;
+            app.ColorVarLabel = uilabel(secColor, 'Text','Color by:');
+            app.ColorVarLabel.Layout.Row = 1; app.ColorVarLabel.Layout.Column = 1;
+            app.ColorVarDropDown = uidropdown(secColor, 'Items',{'(row index)'});
+            app.ColorVarDropDown.Layout.Row = 1; app.ColorVarDropDown.Layout.Column = 2;
 
-            app.ColorVarLabel = uilabel(app.ControlGrid, 'Text','Color by:');
-            app.ColorVarLabel.Layout.Row = 10; app.ColorVarLabel.Layout.Column = 1;
-            app.ColorVarDropDown = uidropdown(app.ControlGrid, 'Items',{'(row index)'});
-            app.ColorVarDropDown.Layout.Row = 10; app.ColorVarDropDown.Layout.Column = 2;
-
-            app.ColorVarWorkspaceButton = uibutton(app.ControlGrid, 'Text','Color by Workspace Variable...', ...
+            app.ColorVarWorkspaceButton = uibutton(secColor, 'Text','Color: Workspace...', ...
                 'ButtonPushedFcn', @(btn,event) ColorVarWorkspaceButtonPushed(app));
-            app.ColorVarWorkspaceButton.Layout.Row = 11; app.ColorVarWorkspaceButton.Layout.Column = [1 2];
+            app.ColorVarWorkspaceButton.Layout.Row = 2; app.ColorVarWorkspaceButton.Layout.Column = [1 2];
 
-            app.TimeVarLabel = uilabel(app.ControlGrid, 'Text','Time axis:');
-            app.TimeVarLabel.Layout.Row = 12; app.TimeVarLabel.Layout.Column = 1;
-            app.TimeVarDropDown = uidropdown(app.ControlGrid, 'Items',{'(row index)'});
-            app.TimeVarDropDown.Layout.Row = 12; app.TimeVarDropDown.Layout.Column = 2;
+            app.TimeVarLabel = uilabel(secColor, 'Text','Time axis:');
+            app.TimeVarLabel.Layout.Row = 3; app.TimeVarLabel.Layout.Column = 1;
+            app.TimeVarDropDown = uidropdown(secColor, 'Items',{'(row index)'});
+            app.TimeVarDropDown.Layout.Row = 3; app.TimeVarDropDown.Layout.Column = 2;
 
-            app.KLabel = uilabel(app.ControlGrid, 'Text','k (neighbors):');
-            app.KLabel.Layout.Row = 13; app.KLabel.Layout.Column = 1;
-            app.KEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.KEditField.Layout.Row = 13; app.KEditField.Layout.Column = 2;
+            app.EmbedLagLabel = uilabel(secColor, 'Text','embed lag:');
+            app.EmbedLagLabel.Layout.Row = 4; app.EmbedLagLabel.Layout.Column = 1;
+            app.EmbedLagEditField = uieditfield(secColor,'numeric', 'Value',0, 'Limits',[0 Inf], 'RoundFractionalValues','on');
+            app.EmbedLagEditField.Layout.Row = 4; app.EmbedLagEditField.Layout.Column = 2;
 
-            app.DLabel = uilabel(app.ControlGrid, 'Text','d (compression):');
-            app.DLabel.Layout.Row = 14; app.DLabel.Layout.Column = 1;
-            app.DEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.DEditField.Layout.Row = 14; app.DEditField.Layout.Column = 2;
+            app.EmbedOrderLabel = uilabel(secColor, 'Text','embed order:');
+            app.EmbedOrderLabel.Layout.Row = 5; app.EmbedOrderLabel.Layout.Column = 1;
+            app.EmbedOrderEditField = uieditfield(secColor,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
+            app.EmbedOrderEditField.Layout.Row = 5; app.EmbedOrderEditField.Layout.Column = 2;
 
-            app.TExcludeLabel = uilabel(app.ControlGrid, 'Text','texclude:');
-            app.TExcludeLabel.Layout.Row = 15; app.TExcludeLabel.Layout.Column = 1;
-            app.TExcludeEditField = uieditfield(app.ControlGrid,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.TExcludeEditField.Layout.Row = 15; app.TExcludeEditField.Layout.Column = 2;
+            % --- section 4: graph parameters ---
+            secParams = uigridlayout(app.ControlGrid, [6 2]);
+            secParams.Layout.Row = 1; secParams.Layout.Column = 4;
+            secParams.RowHeight = {26,26,26,26,26,26};
+            secParams.ColumnWidth = {110,'1x'};
+            secParams.Padding = [0 0 0 0];
 
-            app.MaxDistPrctLabel = uilabel(app.ControlGrid, 'Text','max dist percentile:');
-            app.MaxDistPrctLabel.Layout.Row = 16; app.MaxDistPrctLabel.Layout.Column = 1;
-            app.MaxDistPrctEditField = uieditfield(app.ControlGrid,'numeric', 'Value',100, 'Limits',[0 100]);
-            app.MaxDistPrctEditField.Layout.Row = 16; app.MaxDistPrctEditField.Layout.Column = 2;
+            app.KLabel = uilabel(secParams, 'Text','k (neighbors):');
+            app.KLabel.Layout.Row = 1; app.KLabel.Layout.Column = 1;
+            app.KEditField = uieditfield(secParams,'numeric', 'Value',3, 'Limits',[1 Inf], 'RoundFractionalValues','on');
+            app.KEditField.Layout.Row = 1; app.KEditField.Layout.Column = 2;
 
-            app.MaxDistLabel = uilabel(app.ControlGrid, 'Text','max dist (absolute):');
-            app.MaxDistLabel.Layout.Row = 17; app.MaxDistLabel.Layout.Column = 1;
-            app.MaxDistEditField = uieditfield(app.ControlGrid,'numeric', 'Value',Inf, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.MaxDistEditField.Layout.Row = 17; app.MaxDistEditField.Layout.Column = 2;
+            app.DLabel = uilabel(secParams, 'Text','d (compression):');
+            app.DLabel.Layout.Row = 2; app.DLabel.Layout.Column = 1;
+            app.DEditField = uieditfield(secParams,'numeric', 'Value',3, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
+            app.DEditField.Layout.Row = 2; app.DEditField.Layout.Column = 2;
 
-            app.ReciprocalCheckBox = uicheckbox(app.ControlGrid, 'Text','reciprocal', 'Value',true);
-            app.ReciprocalCheckBox.Layout.Row = 18; app.ReciprocalCheckBox.Layout.Column = [1 2];
+            app.TExcludeLabel = uilabel(secParams, 'Text','texclude:');
+            app.TExcludeLabel.Layout.Row = 3; app.TExcludeLabel.Layout.Column = 1;
+            app.TExcludeEditField = uieditfield(secParams,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
+            app.TExcludeEditField.Layout.Row = 3; app.TExcludeEditField.Layout.Column = 2;
 
-            app.NodeSizeModeLabel = uilabel(app.ControlGrid, 'Text','Node size mode:');
-            app.NodeSizeModeLabel.Layout.Row = 19; app.NodeSizeModeLabel.Layout.Column = 1;
-            app.NodeSizeModeDropDown = uidropdown(app.ControlGrid, 'Items',{'log','rank','original'});
-            app.NodeSizeModeDropDown.Layout.Row = 19; app.NodeSizeModeDropDown.Layout.Column = 2;
+            app.MaxDistPrctLabel = uilabel(secParams, 'Text','max dist %ile:', ...
+                'Tooltip','max dist percentile');
+            app.MaxDistPrctLabel.Layout.Row = 4; app.MaxDistPrctLabel.Layout.Column = 1;
+            app.MaxDistPrctEditField = uieditfield(secParams,'numeric', 'Value',100, 'Limits',[0 100]);
+            app.MaxDistPrctEditField.Layout.Row = 4; app.MaxDistPrctEditField.Layout.Column = 2;
 
-            app.LabelMethodLabel = uilabel(app.ControlGrid, 'Text','Label method:');
-            app.LabelMethodLabel.Layout.Row = 20; app.LabelMethodLabel.Layout.Column = 1;
-            app.LabelMethodDropDown = uidropdown(app.ControlGrid, 'Items',{'mode','mean','median','none'});
-            app.LabelMethodDropDown.Layout.Row = 20; app.LabelMethodDropDown.Layout.Column = 2;
+            app.MaxDistLabel = uilabel(secParams, 'Text','max dist:', ...
+                'Tooltip','max dist (absolute)');
+            app.MaxDistLabel.Layout.Row = 5; app.MaxDistLabel.Layout.Column = 1;
+            app.MaxDistEditField = uieditfield(secParams,'numeric', 'Value',Inf, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
+            app.MaxDistEditField.Layout.Row = 5; app.MaxDistEditField.Layout.Column = 2;
 
-            app.BuildButton = uibutton(app.ControlGrid, 'Text','Build Network', ...
+            app.ReciprocalCheckBox = uicheckbox(secParams, 'Text','reciprocal', 'Value',true);
+            app.ReciprocalCheckBox.Layout.Row = 6; app.ReciprocalCheckBox.Layout.Column = [1 2];
+
+            % --- section 5: style & build ---
+            secBuild = uigridlayout(app.ControlGrid, [5 2]);
+            secBuild.Layout.Row = 1; secBuild.Layout.Column = 5;
+            secBuild.RowHeight = {26,26,34,18,'1x'};
+            secBuild.ColumnWidth = {90,'1x'};
+            secBuild.Padding = [0 0 0 0];
+
+            app.NodeSizeModeLabel = uilabel(secBuild, 'Text','Node size:');
+            app.NodeSizeModeLabel.Layout.Row = 1; app.NodeSizeModeLabel.Layout.Column = 1;
+            app.NodeSizeModeDropDown = uidropdown(secBuild, 'Items',{'log','rank','original'});
+            app.NodeSizeModeDropDown.Layout.Row = 1; app.NodeSizeModeDropDown.Layout.Column = 2;
+
+            app.LabelMethodLabel = uilabel(secBuild, 'Text','Label method:');
+            app.LabelMethodLabel.Layout.Row = 2; app.LabelMethodLabel.Layout.Column = 1;
+            app.LabelMethodDropDown = uidropdown(secBuild, 'Items',{'mode','mean','median','none'});
+            app.LabelMethodDropDown.Layout.Row = 2; app.LabelMethodDropDown.Layout.Column = 2;
+
+            app.BuildButton = uibutton(secBuild, 'Text','Build Network', ...
                 'BackgroundColor',[0.31 0.60 0.95], 'FontColor','white', 'FontWeight','bold', ...
                 'ButtonPushedFcn', @(btn,event) BuildButtonPushed(app));
-            app.BuildButton.Layout.Row = 21; app.BuildButton.Layout.Column = [1 2];
+            app.BuildButton.Layout.Row = 3; app.BuildButton.Layout.Column = [1 2];
 
-            app.StatusLabel = uilabel(app.ControlGrid, 'Text','Status:');
-            app.StatusLabel.Layout.Row = 22; app.StatusLabel.Layout.Column = [1 2];
+            app.StatusLabel = uilabel(secBuild, 'Text','Status:');
+            app.StatusLabel.Layout.Row = 4; app.StatusLabel.Layout.Column = [1 2];
 
-            app.StatusTextArea = uitextarea(app.ControlGrid, 'Value',{'Load a data file to get started.'}, 'Editable','off');
-            app.StatusTextArea.Layout.Row = 23; app.StatusTextArea.Layout.Column = [1 2];
+            app.StatusTextArea = uitextarea(secBuild, 'Value',{'Load a data file to get started.'}, 'Editable','off');
+            app.StatusTextArea.Layout.Row = 5; app.StatusTextArea.Layout.Column = [1 2];
 
-            % ================= right: plot panel =================
+            % ================= bottom: plot panel =================
             app.PlotPanel = uipanel(app.GridLayout, 'Title','Network');
-            app.PlotPanel.Layout.Row = 1;
-            app.PlotPanel.Layout.Column = 2;
+            app.PlotPanel.Layout.Row = 2;
+            app.PlotPanel.Layout.Column = 1;
 
             app.PlotGrid = uigridlayout(app.PlotPanel, [1 2]);
             app.PlotGrid.Padding = [2 2 2 2];
