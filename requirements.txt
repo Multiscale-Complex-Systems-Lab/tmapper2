@@ -1,0 +1,8 @@
+# Python packages needed to BUILD the documentation site.
+# These are NOT MATLAB dependencies — they are only used by the GitHub Actions
+# job (and by you locally, if you want to preview) to turn the Markdown in
+# docs/ into the HTML site.
+#
+# Install locally with:  pip install -r docs/requirements.txt
+# Preview with:          mkdocs serve
+mkdocs-material>=9.5
