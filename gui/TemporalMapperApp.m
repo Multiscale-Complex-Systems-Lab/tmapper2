@@ -28,6 +28,12 @@ classdef TemporalMapperApp < matlab.apps.AppBase
     (7-23-2026) add "Load from Workspace..." button so users whose data
     is already a table/matrix variable in the base workspace don't need
     to round-trip it through a file first.
+    (7-23-2026) add "Color by Workspace Variable..." button (and the
+    public addColorVarFromWorkspace method backing it) so users can
+    color the network by a vector that isn't a column of the loaded
+    data. Also fixes a RowHeight/row-count mismatch from the previous
+    change that had silently misassigned heights to several rows below
+    "Color by".
     %}
 
     properties (Access = public)
@@ -51,6 +57,7 @@ classdef TemporalMapperApp < matlab.apps.AppBase
         EmbedOrderEditField matlab.ui.control.NumericEditField
         ColorVarLabel       matlab.ui.control.Label
         ColorVarDropDown    matlab.ui.control.DropDown
+        ColorVarWorkspaceButton matlab.ui.control.Button
         TimeVarLabel        matlab.ui.control.Label
         TimeVarDropDown     matlab.ui.control.DropDown
         KLabel              matlab.ui.control.Label
@@ -79,6 +86,8 @@ classdef TemporalMapperApp < matlab.apps.AppBase
     properties (Access = private)
         DataTable = table()   % the loaded data
         NumericVarNames = {}  % candidate columns (numeric only)
+        ExtraColorVarNames = {}  % display names of workspace-sourced color vectors
+        ExtraColorVarValues = {} % their values, parallel to ExtraColorVarNames
     end
 
     methods (Access = public)
@@ -97,6 +106,10 @@ classdef TemporalMapperApp < matlab.apps.AppBase
 
             app.DataTable = T;
             app.NumericVarNames = varNames;
+            % any workspace-sourced color vectors were aligned to the
+            % previous data's row count, so they no longer apply
+            app.ExtraColorVarNames = {};
+            app.ExtraColorVarValues = {};
             app.VariableListBox.Items = varNames;
             app.VariableListBox.Value = varNames; % select all by default
             app.ColorVarDropDown.Items = [{'(row index)'}, varNames];
@@ -105,6 +118,36 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             app.TimeVarDropDown.Value = '(row index)';
             app.FileLabel.Text = sprintf('Loaded: %d rows, %d numeric vars', height(T), numel(varNames));
             app.StatusTextArea.Value = {sprintf('Loaded data: %d rows, %d numeric variables.', height(T), numel(varNames))};
+        end
+
+        function addColorVarFromWorkspace(app, name, v)
+            %ADDCOLORVARFROMWORKSPACE register a numeric vector as a
+            %selectable "Color by" option, displayed as "name
+            %(workspace)". Must have one element per row of the loaded
+            %data, since it's indexed positionally like any other color
+            %source in buildNetwork. Used both by
+            %ColorVarWorkspaceButtonPushed (after picking a workspace
+            %variable via listdlg) and directly by scripts/tests that
+            %want to bypass that picker dialog.
+            if isempty(app.DataTable)
+                error('TemporalMapperApp:noData','Load a data file first.');
+            end
+            v = v(:);
+            if numel(v) ~= height(app.DataTable)
+                error('TemporalMapperApp:colorVarLengthMismatch', ...
+                    '%s has %d elements, but the loaded data has %d rows -- they must match.', ...
+                    name, numel(v), height(app.DataTable));
+            end
+            displayName = sprintf('%s (workspace)', name);
+            existing = strcmp(app.ExtraColorVarNames, displayName);
+            if any(existing)
+                app.ExtraColorVarValues{existing} = v;
+            else
+                app.ExtraColorVarNames{end+1} = displayName;
+                app.ExtraColorVarValues{end+1} = v;
+            end
+            app.ColorVarDropDown.Items = [{'(row index)'}, app.NumericVarNames, app.ExtraColorVarNames];
+            app.ColorVarDropDown.Value = displayName;
         end
 
         function buildNetwork(app)
@@ -174,13 +217,20 @@ classdef TemporalMapperApp < matlab.apps.AppBase
                 'maxNeighborDist', maxdist);
             [g_simp, members, ~, ~] = filtergraph(g, d, 'reciprocal', recip);
 
-            % -- color variable
-            if strcmp(app.ColorVarDropDown.Value, '(row index)')
+            % -- color variable (a DataTable column, a workspace-sourced
+            % vector picked via ColorVarWorkspaceButton, or row index)
+            selectedColor = app.ColorVarDropDown.Value;
+            if strcmp(selectedColor, '(row index)')
                 colorvar = tidx;
                 colorlabel = 'row index';
+            elseif ismember(selectedColor, app.NumericVarNames)
+                colorvar = app.DataTable.(selectedColor)(rows);
+                colorlabel = selectedColor;
             else
-                colorvar = app.DataTable.(app.ColorVarDropDown.Value)(rows);
-                colorlabel = app.ColorVarDropDown.Value;
+                extraIdx = strcmp(app.ExtraColorVarNames, selectedColor);
+                fullvec = app.ExtraColorVarValues{extraIdx};
+                colorvar = fullvec(rows);
+                colorlabel = selectedColor;
             end
 
             % -- time axis variable (for the recurrence plot)
@@ -293,6 +343,39 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             end
         end
 
+        function ColorVarWorkspaceButtonPushed(app, ~)
+            % -- let users color the network by a workspace vector that
+            % isn't a column of the loaded data (e.g. a label vector
+            % computed separately).
+            if isempty(app.DataTable)
+                uialert(app.UIFigure, 'Load a data file first.', 'Load error');
+                return
+            end
+            varNames = evalin('base','who');
+            isCandidate = false(size(varNames));
+            for i = 1:numel(varNames)
+                v = evalin('base', varNames{i});
+                isCandidate(i) = isnumeric(v) && isvector(v);
+            end
+            varNames = varNames(isCandidate);
+            if isempty(varNames)
+                uialert(app.UIFigure, ...
+                    'No numeric vector variables found in the base workspace.', 'Load error');
+                return
+            end
+            [idx, tf] = listdlg('ListString', varNames, 'SelectionMode','single', ...
+                'Name','Select workspace variable', 'PromptString','Select a vector to color by:');
+            if ~tf
+                return
+            end
+            v = evalin('base', varNames{idx});
+            try
+                app.addColorVarFromWorkspace(varNames{idx}, v);
+            catch ME
+                uialert(app.UIFigure, ME.message, 'Load error');
+            end
+        end
+
         function BuildButtonPushed(app, ~)
             try
                 app.buildNetwork();
@@ -320,8 +403,8 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             app.ControlPanel.Layout.Row = 1;
             app.ControlPanel.Layout.Column = 1;
 
-            app.ControlGrid = uigridlayout(app.ControlPanel, [22 2]);
-            app.ControlGrid.RowHeight = {32,32,24,20,22,150,26,26,26,26,26,26,26,26,26,26,26,26,34,18,'1x'};
+            app.ControlGrid = uigridlayout(app.ControlPanel, [23 2]);
+            app.ControlGrid.RowHeight = {32,32,24,20,22,150,26,26,26,26,26,26,26,26,26,26,26,26,26,26,34,18,'1x'};
             app.ControlGrid.ColumnWidth = {120,'1x'};
             app.ControlGrid.RowSpacing = 4;
 
@@ -364,59 +447,63 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             app.ColorVarDropDown = uidropdown(app.ControlGrid, 'Items',{'(row index)'});
             app.ColorVarDropDown.Layout.Row = 10; app.ColorVarDropDown.Layout.Column = 2;
 
+            app.ColorVarWorkspaceButton = uibutton(app.ControlGrid, 'Text','Color by Workspace Variable...', ...
+                'ButtonPushedFcn', @(btn,event) ColorVarWorkspaceButtonPushed(app));
+            app.ColorVarWorkspaceButton.Layout.Row = 11; app.ColorVarWorkspaceButton.Layout.Column = [1 2];
+
             app.TimeVarLabel = uilabel(app.ControlGrid, 'Text','Time axis:');
-            app.TimeVarLabel.Layout.Row = 11; app.TimeVarLabel.Layout.Column = 1;
+            app.TimeVarLabel.Layout.Row = 12; app.TimeVarLabel.Layout.Column = 1;
             app.TimeVarDropDown = uidropdown(app.ControlGrid, 'Items',{'(row index)'});
-            app.TimeVarDropDown.Layout.Row = 11; app.TimeVarDropDown.Layout.Column = 2;
+            app.TimeVarDropDown.Layout.Row = 12; app.TimeVarDropDown.Layout.Column = 2;
 
             app.KLabel = uilabel(app.ControlGrid, 'Text','k (neighbors):');
-            app.KLabel.Layout.Row = 12; app.KLabel.Layout.Column = 1;
+            app.KLabel.Layout.Row = 13; app.KLabel.Layout.Column = 1;
             app.KEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.KEditField.Layout.Row = 12; app.KEditField.Layout.Column = 2;
+            app.KEditField.Layout.Row = 13; app.KEditField.Layout.Column = 2;
 
             app.DLabel = uilabel(app.ControlGrid, 'Text','d (compression):');
-            app.DLabel.Layout.Row = 13; app.DLabel.Layout.Column = 1;
+            app.DLabel.Layout.Row = 14; app.DLabel.Layout.Column = 1;
             app.DEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.DEditField.Layout.Row = 13; app.DEditField.Layout.Column = 2;
+            app.DEditField.Layout.Row = 14; app.DEditField.Layout.Column = 2;
 
             app.TExcludeLabel = uilabel(app.ControlGrid, 'Text','texclude:');
-            app.TExcludeLabel.Layout.Row = 14; app.TExcludeLabel.Layout.Column = 1;
+            app.TExcludeLabel.Layout.Row = 15; app.TExcludeLabel.Layout.Column = 1;
             app.TExcludeEditField = uieditfield(app.ControlGrid,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.TExcludeEditField.Layout.Row = 14; app.TExcludeEditField.Layout.Column = 2;
+            app.TExcludeEditField.Layout.Row = 15; app.TExcludeEditField.Layout.Column = 2;
 
             app.MaxDistPrctLabel = uilabel(app.ControlGrid, 'Text','max dist percentile:');
-            app.MaxDistPrctLabel.Layout.Row = 15; app.MaxDistPrctLabel.Layout.Column = 1;
+            app.MaxDistPrctLabel.Layout.Row = 16; app.MaxDistPrctLabel.Layout.Column = 1;
             app.MaxDistPrctEditField = uieditfield(app.ControlGrid,'numeric', 'Value',100, 'Limits',[0 100]);
-            app.MaxDistPrctEditField.Layout.Row = 15; app.MaxDistPrctEditField.Layout.Column = 2;
+            app.MaxDistPrctEditField.Layout.Row = 16; app.MaxDistPrctEditField.Layout.Column = 2;
 
             app.MaxDistLabel = uilabel(app.ControlGrid, 'Text','max dist (absolute):');
-            app.MaxDistLabel.Layout.Row = 16; app.MaxDistLabel.Layout.Column = 1;
+            app.MaxDistLabel.Layout.Row = 17; app.MaxDistLabel.Layout.Column = 1;
             app.MaxDistEditField = uieditfield(app.ControlGrid,'numeric', 'Value',Inf, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.MaxDistEditField.Layout.Row = 16; app.MaxDistEditField.Layout.Column = 2;
+            app.MaxDistEditField.Layout.Row = 17; app.MaxDistEditField.Layout.Column = 2;
 
             app.ReciprocalCheckBox = uicheckbox(app.ControlGrid, 'Text','reciprocal', 'Value',true);
-            app.ReciprocalCheckBox.Layout.Row = 17; app.ReciprocalCheckBox.Layout.Column = [1 2];
+            app.ReciprocalCheckBox.Layout.Row = 18; app.ReciprocalCheckBox.Layout.Column = [1 2];
 
             app.NodeSizeModeLabel = uilabel(app.ControlGrid, 'Text','Node size mode:');
-            app.NodeSizeModeLabel.Layout.Row = 18; app.NodeSizeModeLabel.Layout.Column = 1;
+            app.NodeSizeModeLabel.Layout.Row = 19; app.NodeSizeModeLabel.Layout.Column = 1;
             app.NodeSizeModeDropDown = uidropdown(app.ControlGrid, 'Items',{'log','rank','original'});
-            app.NodeSizeModeDropDown.Layout.Row = 18; app.NodeSizeModeDropDown.Layout.Column = 2;
+            app.NodeSizeModeDropDown.Layout.Row = 19; app.NodeSizeModeDropDown.Layout.Column = 2;
 
             app.LabelMethodLabel = uilabel(app.ControlGrid, 'Text','Label method:');
-            app.LabelMethodLabel.Layout.Row = 19; app.LabelMethodLabel.Layout.Column = 1;
+            app.LabelMethodLabel.Layout.Row = 20; app.LabelMethodLabel.Layout.Column = 1;
             app.LabelMethodDropDown = uidropdown(app.ControlGrid, 'Items',{'mode','mean','median','none'});
-            app.LabelMethodDropDown.Layout.Row = 19; app.LabelMethodDropDown.Layout.Column = 2;
+            app.LabelMethodDropDown.Layout.Row = 20; app.LabelMethodDropDown.Layout.Column = 2;
 
             app.BuildButton = uibutton(app.ControlGrid, 'Text','Build Network', ...
                 'BackgroundColor',[0.31 0.60 0.95], 'FontColor','white', 'FontWeight','bold', ...
                 'ButtonPushedFcn', @(btn,event) BuildButtonPushed(app));
-            app.BuildButton.Layout.Row = 20; app.BuildButton.Layout.Column = [1 2];
+            app.BuildButton.Layout.Row = 21; app.BuildButton.Layout.Column = [1 2];
 
             app.StatusLabel = uilabel(app.ControlGrid, 'Text','Status:');
-            app.StatusLabel.Layout.Row = 21; app.StatusLabel.Layout.Column = [1 2];
+            app.StatusLabel.Layout.Row = 22; app.StatusLabel.Layout.Column = [1 2];
 
             app.StatusTextArea = uitextarea(app.ControlGrid, 'Value',{'Load a data file to get started.'}, 'Editable','off');
-            app.StatusTextArea.Layout.Row = 22; app.StatusTextArea.Layout.Column = [1 2];
+            app.StatusTextArea.Layout.Row = 23; app.StatusTextArea.Layout.Column = [1 2];
 
             % ================= right: plot panel =================
             app.PlotPanel = uipanel(app.GridLayout, 'Title','Network');
