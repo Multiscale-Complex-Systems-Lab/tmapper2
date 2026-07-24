@@ -1,4 +1,4 @@
-classdef TemporalMapperApp < matlab.apps.AppBase
+classdef TemporalMapperApp < handle
     %TEMPORALMAPPERAPP interactive GUI for the Temporal Mapper pipeline.
     %   Load a data file, pick which numeric columns to build the
     %   attractor transition network from, set the tknndigraph/filtergraph
@@ -12,101 +12,71 @@ classdef TemporalMapperApp < matlab.apps.AppBase
     %   The data can also be loaded programmatically (bypassing the file
     %   picker), which is handy for scripting or testing:
     %       app.loadData(readtable("sampledata/EL_temp.csv"));
-    %       app.VariableListBox.Value = {'tmax','tmin','prcp'};
+    %       app.VariableListBox.Value = 1:3; % select first 3 variables
     %       app.buildNetwork();
     %
     %{
     created by MZ (with Claude Code), 7-23-2026
-    modifications:
-    (7-23-2026) add z-score checkbox (was always-on) and a "Select All"
-    button for the variable list.
-    (7-23-2026) add delay-embedding lag/order fields, matching
-    tmapper_demo.m's "quick and dirty delay embedding" -- concatenates
-    'order' copies of the state, each 'lag' time points apart, to
-    reveal cyclic/recurrent structure not visible in the raw variables
-    alone. order=1 (default) skips embedding, matching prior behavior.
-    (7-23-2026) add "Load from Workspace..." button so users whose data
-    is already a table/matrix variable in the base workspace don't need
-    to round-trip it through a file first.
-    (7-23-2026) add "Color by Workspace Variable..." button (and the
-    public addColorVarFromWorkspace method backing it) so users can
-    color the network by a vector that isn't a column of the loaded
-    data. Also fixes a RowHeight/row-count mismatch from the previous
-    change that had silently misassigned heights to several rows below
-    "Color by".
-    (7-23-2026) rework the main layout: Setup panel now sits horizontal
-    across the top (its controls split into 5 sections that each keep
-    the original label|field grouping, just narrower/shorter) instead
-    of a tall left sidebar, giving Network/Recurrence the bulk of the
-    window instead of half of it.
-    (7-23-2026) fix: confirmed on real hardware (not just a screenshot
-    tool artifact) that several rightmost groups -- including the
-    entire style/build group with the Build Network button -- weren't
-    rendering at all. Root-caused with a minimal, isolated reproducer
-    unrelated to this app: nesting a per-group sub-grid (data/
-    variables/color/params/build) inside a top-level grid, itself
-    inside the outer Setup-on-top/Network-below grid, put content one
-    level deeper than uigridlayout in this MATLAB version reliably
-    paints -- later-created groups silently failed to render, in the
-    live app, independent of window/screen size. Fixed by flattening:
-    ControlGrid is now a single grid with every control placed directly
-    via row/column spans, removing that extra nesting level entirely.
-    (7-23-2026) fix: flattening fixed the rendering, but confirmed on
-    real hardware that cramming all 5 groups into 1 row of 12 columns
-    still needed more width than the actual window/screen gave it --
-    content ran past the window's real edge instead of shrinking to
-    fit. Restructured into 2 stacked row-bands of 6 columns each
-    (halving the width any single row needs), and the window now
-    requests a size derived from get(0,'ScreenSize') instead of a
-    hardcoded guess, so it can never ask for more room than the screen
-    actually has.
+    modifications: see git history for the many rounds of layout work
+    that happened here.
+    (7-24-2026) rewritten from an App Designer-style uifigure/
+    uigridlayout app to a traditional figure/uicontrol app. The
+    uigridlayout version had a confirmed, reproducible uifigure
+    rendering bug on a mixed-DPI dual-monitor Windows setup (content
+    beyond ~600-650px in a single grid, or the first row of a panel,
+    would silently fail to paint -- independent of DPI override
+    settings, GPU software/hardware rendering, or window/monitor
+    placement, and reproducible in minimal test scripts unrelated to
+    this app). Classic figure/uicontrol uses a completely different
+    (non-web-based) rendering path and doesn't exhibit this bug.
+    Layout is now done via a small helper (cellPosition) that computes
+    normalized Position rectangles for a conceptual 10-row x 6-column
+    grid within the Setup panel, matching the same control groupings
+    the uigridlayout version used.
     %}
 
     properties (Access = public)
         UIFigure            matlab.ui.Figure
-        GridLayout          matlab.ui.container.GridLayout
         ControlPanel        matlab.ui.container.Panel
         PlotPanel           matlab.ui.container.Panel
-        ControlGrid         matlab.ui.container.GridLayout
-        PlotGrid            matlab.ui.container.GridLayout
 
-        LoadDataButton      matlab.ui.control.Button
-        LoadWorkspaceButton matlab.ui.control.Button
-        FileLabel           matlab.ui.control.Label
-        VariablesLabel      matlab.ui.control.Label
-        SelectAllButton     matlab.ui.control.Button
-        VariableListBox     matlab.ui.control.ListBox
-        ZscoreCheckBox      matlab.ui.control.CheckBox
-        EmbedLagLabel       matlab.ui.control.Label
-        EmbedLagEditField   matlab.ui.control.NumericEditField
-        EmbedOrderLabel     matlab.ui.control.Label
-        EmbedOrderEditField matlab.ui.control.NumericEditField
-        ColorVarLabel       matlab.ui.control.Label
-        ColorVarDropDown    matlab.ui.control.DropDown
-        ColorVarWorkspaceButton matlab.ui.control.Button
-        TimeVarLabel        matlab.ui.control.Label
-        TimeVarDropDown     matlab.ui.control.DropDown
-        KLabel              matlab.ui.control.Label
-        KEditField          matlab.ui.control.NumericEditField
-        DLabel              matlab.ui.control.Label
-        DEditField          matlab.ui.control.NumericEditField
-        TExcludeLabel       matlab.ui.control.Label
-        TExcludeEditField   matlab.ui.control.NumericEditField
-        MaxDistPrctLabel    matlab.ui.control.Label
-        MaxDistPrctEditField matlab.ui.control.NumericEditField
-        MaxDistLabel        matlab.ui.control.Label
-        MaxDistEditField    matlab.ui.control.NumericEditField
-        ReciprocalCheckBox  matlab.ui.control.CheckBox
-        NodeSizeModeLabel   matlab.ui.control.Label
-        NodeSizeModeDropDown matlab.ui.control.DropDown
-        LabelMethodLabel    matlab.ui.control.Label
-        LabelMethodDropDown matlab.ui.control.DropDown
-        BuildButton         matlab.ui.control.Button
-        StatusLabel         matlab.ui.control.Label
-        StatusTextArea      matlab.ui.control.TextArea
+        LoadDataButton          matlab.ui.control.UIControl
+        LoadWorkspaceButton     matlab.ui.control.UIControl
+        FileLabel               matlab.ui.control.UIControl
+        VariablesLabel          matlab.ui.control.UIControl
+        SelectAllButton         matlab.ui.control.UIControl
+        VariableListBox         matlab.ui.control.UIControl
+        ZscoreCheckBox          matlab.ui.control.UIControl
+        EmbedLagLabel           matlab.ui.control.UIControl
+        EmbedLagEditField       matlab.ui.control.UIControl
+        EmbedOrderLabel         matlab.ui.control.UIControl
+        EmbedOrderEditField     matlab.ui.control.UIControl
+        ColorVarLabel           matlab.ui.control.UIControl
+        ColorVarDropDown        matlab.ui.control.UIControl
+        ColorVarWorkspaceButton matlab.ui.control.UIControl
+        TimeVarLabel            matlab.ui.control.UIControl
+        TimeVarDropDown         matlab.ui.control.UIControl
+        KLabel                  matlab.ui.control.UIControl
+        KEditField              matlab.ui.control.UIControl
+        DLabel                  matlab.ui.control.UIControl
+        DEditField              matlab.ui.control.UIControl
+        TExcludeLabel           matlab.ui.control.UIControl
+        TExcludeEditField       matlab.ui.control.UIControl
+        MaxDistPrctLabel        matlab.ui.control.UIControl
+        MaxDistPrctEditField    matlab.ui.control.UIControl
+        MaxDistLabel            matlab.ui.control.UIControl
+        MaxDistEditField        matlab.ui.control.UIControl
+        ReciprocalCheckBox      matlab.ui.control.UIControl
+        NodeSizeModeLabel       matlab.ui.control.UIControl
+        NodeSizeModeDropDown    matlab.ui.control.UIControl
+        LabelMethodLabel        matlab.ui.control.UIControl
+        LabelMethodDropDown     matlab.ui.control.UIControl
+        BuildButton             matlab.ui.control.UIControl
+        StatusLabel             matlab.ui.control.UIControl
+        StatusTextArea          matlab.ui.control.UIControl
 
-        NetworkAxes         matlab.ui.control.UIAxes
-        RecurrenceAxes      matlab.ui.control.UIAxes
+        NetworkAxes         matlab.graphics.axis.Axes
+        RecurrenceAxes      matlab.graphics.axis.Axes
     end
 
     properties (Access = private)
@@ -136,14 +106,14 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             % previous data's row count, so they no longer apply
             app.ExtraColorVarNames = {};
             app.ExtraColorVarValues = {};
-            app.VariableListBox.Items = varNames;
-            app.VariableListBox.Value = varNames; % select all by default
-            app.ColorVarDropDown.Items = [{'(row index)'}, varNames];
-            app.ColorVarDropDown.Value = '(row index)';
-            app.TimeVarDropDown.Items = [{'(row index)'}, varNames];
-            app.TimeVarDropDown.Value = '(row index)';
-            app.FileLabel.Text = sprintf('Loaded: %d rows, %d numeric vars', height(T), numel(varNames));
-            app.StatusTextArea.Value = {sprintf('Loaded data: %d rows, %d numeric variables.', height(T), numel(varNames))};
+            app.VariableListBox.String = varNames;
+            app.VariableListBox.Value = 1:numel(varNames); % select all by default
+            app.ColorVarDropDown.String = [{'(row index)'}, varNames];
+            app.ColorVarDropDown.Value = 1;
+            app.TimeVarDropDown.String = [{'(row index)'}, varNames];
+            app.TimeVarDropDown.Value = 1;
+            app.FileLabel.String = sprintf('Loaded: %d rows, %d numeric vars', height(T), numel(varNames));
+            app.StatusTextArea.String = {sprintf('Loaded data: %d rows, %d numeric variables.', height(T), numel(varNames))};
         end
 
         function addColorVarFromWorkspace(app, name, v)
@@ -172,8 +142,8 @@ classdef TemporalMapperApp < matlab.apps.AppBase
                 app.ExtraColorVarNames{end+1} = displayName;
                 app.ExtraColorVarValues{end+1} = v;
             end
-            app.ColorVarDropDown.Items = [{'(row index)'}, app.NumericVarNames, app.ExtraColorVarNames];
-            app.ColorVarDropDown.Value = displayName;
+            app.ColorVarDropDown.String = [{'(row index)'}, app.NumericVarNames, app.ExtraColorVarNames];
+            app.ColorVarDropDown.Value = numel(app.ColorVarDropDown.String); % select the one just added
         end
 
         function buildNetwork(app)
@@ -184,7 +154,7 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             if isempty(app.DataTable)
                 error('TemporalMapperApp:noData','Load a data file first.');
             end
-            selectedVars = app.VariableListBox.Value;
+            selectedVars = app.VariableListBox.String(app.VariableListBox.Value);
             if isempty(selectedVars)
                 error('TemporalMapperApp:noVars','Select at least one variable to build the network from.');
             end
@@ -202,8 +172,8 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             % that isn't visible in the raw variables alone (see
             % tmapper_demo.m's "quick and dirty delay embedding"). The
             % default order=1 skips this and passes X_raw through as-is.
-            lag = app.EmbedLagEditField.Value;
-            order = app.EmbedOrderEditField.Value;
+            lag = app.parseNumericField(app.EmbedLagEditField, 'embed lag', 0, Inf, true, false);
+            order = app.parseNumericField(app.EmbedOrderEditField, 'embed order', 1, Inf, true, false);
             if order > 1
                 if lag < 1
                     error('TemporalMapperApp:invalidEmbed', ...
@@ -230,11 +200,11 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             tidx = (1:N)';
             D = pdist2(X,X,'minkowski',2);
 
-            k = app.KEditField.Value;
-            d = app.DEditField.Value;
-            texclude = app.TExcludeEditField.Value;
-            maxdistprct = app.MaxDistPrctEditField.Value;
-            maxdist = app.MaxDistEditField.Value;
+            k = app.parseNumericField(app.KEditField, 'k (neighbors)', 1, Inf, true, false);
+            d = app.parseNumericField(app.DEditField, 'd (compression)', 0, Inf, false, true);
+            texclude = app.parseNumericField(app.TExcludeEditField, 'texclude', 1, Inf, true, false);
+            maxdistprct = app.parseNumericField(app.MaxDistPrctEditField, 'max dist percentile', 0, 100, false, false);
+            maxdist = app.parseNumericField(app.MaxDistEditField, 'max dist', 0, Inf, false, true);
             recip = app.ReciprocalCheckBox.Value;
 
             [g, par] = tknndigraph(D, k, tidx, ...
@@ -245,7 +215,7 @@ classdef TemporalMapperApp < matlab.apps.AppBase
 
             % -- color variable (a DataTable column, a workspace-sourced
             % vector picked via ColorVarWorkspaceButton, or row index)
-            selectedColor = app.ColorVarDropDown.Value;
+            selectedColor = app.ColorVarDropDown.String{app.ColorVarDropDown.Value};
             if strcmp(selectedColor, '(row index)')
                 colorvar = tidx;
                 colorlabel = 'row index';
@@ -260,18 +230,21 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             end
 
             % -- time axis variable (for the recurrence plot)
-            if strcmp(app.TimeVarDropDown.Value, '(row index)')
+            selectedTime = app.TimeVarDropDown.String{app.TimeVarDropDown.Value};
+            if strcmp(selectedTime, '(row index)')
                 t = tidx;
             else
-                t = app.DataTable.(app.TimeVarDropDown.Value)(rows);
+                t = app.DataTable.(selectedTime)(rows);
             end
 
             cla(app.NetworkAxes)
             cla(app.RecurrenceAxes)
 
+            nodeSizeMode = app.NodeSizeModeDropDown.String{app.NodeSizeModeDropDown.Value};
+            labelMethod = app.LabelMethodDropDown.String{app.LabelMethodDropDown.Value};
             plottmgraph(g_simp, colorvar, members, 'ax', app.NetworkAxes, ...
-                'nodesizemode', app.NodeSizeModeDropDown.Value, ...
-                'labelmethod', app.LabelMethodDropDown.Value, ...
+                'nodesizemode', nodeSizeMode, ...
+                'labelmethod', labelMethod, ...
                 'colorlabel', colorlabel);
             % axis('equal') alone lets MATLAB stretch the axis LIMITS
             % (not just the rendered box) to match the axes' own w:h
@@ -305,7 +278,7 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             ylabel(app.RecurrenceAxes,'time')
             title(app.RecurrenceAxes,'geodesic recurrence plot')
 
-            app.StatusTextArea.Value = {sprintf( ...
+            app.StatusTextArea.String = {sprintf( ...
                 'Built network: %d nodes, %d edges. Resolved max distance = %.4g.', ...
                 numnodes(g_simp), numedges(g_simp), par.maxNeighborDist)};
         end
@@ -313,7 +286,31 @@ classdef TemporalMapperApp < matlab.apps.AppBase
 
     methods (Access = private)
 
-        function LoadDataButtonPushed(app, ~)
+        function val = parseNumericField(~, ctrl, label, minVal, maxVal, mustBeInt, minExclusive)
+            %PARSENUMERICFIELD parse+validate a classic edit field's
+            %String as a number, replicating the Limits/
+            %RoundFractionalValues/LowerLimitInclusive constraints the
+            %uieditfield version of this app used to enforce live.
+            val = str2double(ctrl.String);
+            if isnan(val)
+                error('TemporalMapperApp:invalidNumericField', '%s must be a number.', label);
+            end
+            if mustBeInt && val ~= round(val)
+                error('TemporalMapperApp:invalidNumericField', '%s must be an integer.', label);
+            end
+            if minExclusive
+                if val <= minVal
+                    error('TemporalMapperApp:invalidNumericField', '%s must be greater than %g.', label, minVal);
+                end
+            elseif val < minVal
+                error('TemporalMapperApp:invalidNumericField', '%s must be at least %g.', label, minVal);
+            end
+            if val > maxVal
+                error('TemporalMapperApp:invalidNumericField', '%s must be at most %g.', label, maxVal);
+            end
+        end
+
+        function LoadDataButtonPushed(app, ~, ~)
             [file, filepath] = uigetfile({'*.csv;*.txt','Data files (*.csv, *.txt)'; '*.*','All files'}, ...
                 'Select a data file');
             if isequal(file,0)
@@ -322,17 +319,17 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             try
                 T = readtable(fullfile(filepath,file));
             catch ME
-                uialert(app.UIFigure, sprintf('Could not read file: %s', ME.message), 'Load error');
+                errordlg(sprintf('Could not read file: %s', ME.message), 'Load error');
                 return
             end
             try
                 app.loadData(T);
             catch ME
-                uialert(app.UIFigure, ME.message, 'Load error');
+                errordlg(ME.message, 'Load error');
             end
         end
 
-        function LoadWorkspaceButtonPushed(app, ~)
+        function LoadWorkspaceButtonPushed(app, ~, ~)
             % -- offer only base-workspace variables that loadData can
             % actually use: tables, or 2D numeric matrices (which get
             % wrapped into a table via array2table so the rest of the
@@ -345,8 +342,7 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             end
             varNames = varNames(isCandidate);
             if isempty(varNames)
-                uialert(app.UIFigure, ...
-                    'No table or numeric matrix variables found in the base workspace.', 'Load error');
+                errordlg('No table or numeric matrix variables found in the base workspace.', 'Load error');
                 return
             end
             [idx, tf] = listdlg('ListString', varNames, 'SelectionMode','single', ...
@@ -363,18 +359,18 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             end
             try
                 app.loadData(v);
-                app.FileLabel.Text = sprintf('Loaded from workspace: %s', varNames{idx});
+                app.FileLabel.String = sprintf('Loaded from workspace: %s', varNames{idx});
             catch ME
-                uialert(app.UIFigure, ME.message, 'Load error');
+                errordlg(ME.message, 'Load error');
             end
         end
 
-        function ColorVarWorkspaceButtonPushed(app, ~)
+        function ColorVarWorkspaceButtonPushed(app, ~, ~)
             % -- let users color the network by a workspace vector that
             % isn't a column of the loaded data (e.g. a label vector
             % computed separately).
             if isempty(app.DataTable)
-                uialert(app.UIFigure, 'Load a data file first.', 'Load error');
+                errordlg('Load a data file first.', 'Load error');
                 return
             end
             varNames = evalin('base','who');
@@ -385,8 +381,7 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             end
             varNames = varNames(isCandidate);
             if isempty(varNames)
-                uialert(app.UIFigure, ...
-                    'No numeric vector variables found in the base workspace.', 'Load error');
+                errordlg('No numeric vector variables found in the base workspace.', 'Load error');
                 return
             end
             [idx, tf] = listdlg('ListString', varNames, 'SelectionMode','single', ...
@@ -398,187 +393,208 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             try
                 app.addColorVarFromWorkspace(varNames{idx}, v);
             catch ME
-                uialert(app.UIFigure, ME.message, 'Load error');
+                errordlg(ME.message, 'Load error');
             end
         end
 
-        function BuildButtonPushed(app, ~)
+        function BuildButtonPushed(app, ~, ~)
             try
                 app.buildNetwork();
             catch ME
-                uialert(app.UIFigure, ME.message, 'Build error');
-                app.StatusTextArea.Value = {['Error: ' ME.message]};
+                errordlg(ME.message, 'Build error');
+                app.StatusTextArea.String = {['Error: ' ME.message]};
             end
         end
 
-        function SelectAllButtonPushed(app, ~)
-            app.VariableListBox.Value = app.VariableListBox.Items;
+        function SelectAllButtonPushed(app, ~, ~)
+            app.VariableListBox.Value = 1:numel(app.VariableListBox.String);
         end
     end
 
     methods (Access = private)
 
+        function pos = cellPosition(~, row, col, rowSpan, colSpan)
+            %CELLPOSITION normalized [x y w h] (bottom-left origin, as
+            %classic uicontrol/uipanel Position expects) for a cell (or
+            %spanned block of cells) in a conceptual 10-row x 6-column
+            %grid, with row/col counted from the top-left like the
+            %uigridlayout version of this app used. Row 10 is given
+            %extra height for the multi-line status text area.
+            rowWeights = [1 1 1 1 1 1 1 1 1 3];
+            colWeights = ones(1,6);
+            rowFrac = rowWeights / sum(rowWeights);
+            colFrac = colWeights / sum(colWeights);
+            rowTop = [0, cumsum(rowFrac)];
+            colLeft = [0, cumsum(colFrac)];
+            r2 = row + rowSpan - 1;
+            c2 = col + colSpan - 1;
+            xNorm = colLeft(col);
+            wNorm = colLeft(c2+1) - colLeft(col);
+            yTopNorm = rowTop(row);
+            yBotNorm = rowTop(r2+1);
+            hNorm = yBotNorm - yTopNorm;
+            yNorm = 1 - yBotNorm; % convert top-down row count to bottom-up Position
+            pad = 0.008;
+            pos = [xNorm+pad, yNorm+pad, max(wNorm-2*pad,0.001), max(hNorm-2*pad,0.001)];
+        end
+
         function createComponents(app)
-            % request a size guaranteed to fit the actual screen, rather
-            % than a hardcoded guess -- a too-wide request can end up
-            % force-shrunk by the OS/display without the grid content
-            % being recomputed to match, which is what caused columns to
-            % run past the window's real edge even though this class's
-            % own layout math (and every component's own Position) was
-            % internally consistent.
             screenSize = get(0,'ScreenSize');
-            figW = min(1000, 0.85*screenSize(3));
-            figH = min(820, 0.85*screenSize(4));
-            app.UIFigure = uifigure('Name','Temporal Mapper','Position',[100 100 figW figH]);
+            figW = min(1150, 0.85*screenSize(3));
+            figH = min(800, 0.85*screenSize(4));
+            app.UIFigure = figure('Name','Temporal Mapper', 'NumberTitle','off', ...
+                'MenuBar','none', 'ToolBar','none', 'Units','pixels', ...
+                'Position',[100 100 figW figH]);
 
             % top: setup (horizontal); bottom: network (gets the bulk of
             % the window, since the plots benefit from space far more
             % than the mostly-text/short-field setup controls do)
-            app.GridLayout = uigridlayout(app.UIFigure, [2 1]);
-            app.GridLayout.RowHeight = {380, '1x'};
+            app.ControlPanel = uipanel(app.UIFigure, 'Title','Setup', ...
+                'Units','normalized', 'Position',[0 0.55 1 0.45]);
+            app.PlotPanel = uipanel(app.UIFigure, 'Title','Network', ...
+                'Units','normalized', 'Position',[0 0 1 0.55]);
 
-            % ================= top: control panel =================
-            app.ControlPanel = uipanel(app.GridLayout, 'Title','Setup');
-            app.ControlPanel.Layout.Row = 1;
-            app.ControlPanel.Layout.Column = 1;
+            % --- columns 1-2: data ---
+            app.LoadDataButton = uicontrol(app.ControlPanel, 'Style','pushbutton', ...
+                'String','Load Data...', 'Units','normalized', ...
+                'Position', app.cellPosition(1,1,1,2), ...
+                'Callback', @(src,evt) app.LoadDataButtonPushed(src,evt));
 
-            % Single flat grid (no nested per-section sub-grids -- see
-            % note in the 7-23-2026 changelog above about why nesting
-            % broke rendering). Laid out as 2 stacked row-bands of 6
-            % columns each (data/variables/color on top, params/build
-            % below) rather than 1 row of 12 columns: cramming
-            % everything into one row needed more width than the actual
-            % window/screen provided, and content simply ran past the
-            % window's edge instead of shrinking to fit (confirmed on
-            % real hardware). Halving the columns-per-row halves the
-            % width any single row needs.
-            app.ControlGrid = uigridlayout(app.ControlPanel, [10 6]);
-            app.ControlGrid.RowHeight = {28,28,28,28,28, 28,28,28,28,'1x'};
-            app.ControlGrid.ColumnSpacing = 8;
-            app.ControlGrid.RowSpacing = 6;
+            app.LoadWorkspaceButton = uicontrol(app.ControlPanel, 'Style','pushbutton', ...
+                'String','Load from Workspace...', 'Units','normalized', ...
+                'Position', app.cellPosition(2,1,1,2), ...
+                'Callback', @(src,evt) app.LoadWorkspaceButtonPushed(src,evt));
 
-            % --- band 1, columns 1-2: data ---
-            app.LoadDataButton = uibutton(app.ControlGrid, 'Text','Load Data...', ...
-                'ButtonPushedFcn', @(btn,event) LoadDataButtonPushed(app));
-            app.LoadDataButton.Layout.Row = 1; app.LoadDataButton.Layout.Column = [1 2];
+            app.FileLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','No file loaded.', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(3,1,1,2));
 
-            app.LoadWorkspaceButton = uibutton(app.ControlGrid, 'Text','Load from Workspace...', ...
-                'ButtonPushedFcn', @(btn,event) LoadWorkspaceButtonPushed(app));
-            app.LoadWorkspaceButton.Layout.Row = 2; app.LoadWorkspaceButton.Layout.Column = [1 2];
+            % --- columns 3-4: variables ---
+            app.VariablesLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','Variables:', 'HorizontalAlignment','left', ...
+                'TooltipString','Ctrl/shift-click to select multiple.', ...
+                'Units','normalized', 'Position', app.cellPosition(1,3,1,1));
 
-            app.FileLabel = uilabel(app.ControlGrid, 'Text','No file loaded.');
-            app.FileLabel.Layout.Row = 3; app.FileLabel.Layout.Column = [1 2];
+            app.SelectAllButton = uicontrol(app.ControlPanel, 'Style','pushbutton', ...
+                'String','Select All', 'Units','normalized', ...
+                'Position', app.cellPosition(1,4,1,1), ...
+                'Callback', @(src,evt) app.SelectAllButtonPushed(src,evt));
 
-            % --- band 1, columns 3-4: variables ---
-            app.VariablesLabel = uilabel(app.ControlGrid, 'Text','Variables:', ...
-                'Tooltip','Ctrl/shift-click to select multiple.');
-            app.VariablesLabel.Layout.Row = 1; app.VariablesLabel.Layout.Column = 3;
+            app.VariableListBox = uicontrol(app.ControlPanel, 'Style','listbox', ...
+                'String',{}, 'Max',2, 'Min',0, 'Value',[], ...
+                'Units','normalized', 'Position', app.cellPosition(2,3,2,2));
 
-            app.SelectAllButton = uibutton(app.ControlGrid, 'Text','Select All', ...
-                'ButtonPushedFcn', @(btn,event) SelectAllButtonPushed(app));
-            app.SelectAllButton.Layout.Row = 1; app.SelectAllButton.Layout.Column = 4;
+            app.ZscoreCheckBox = uicontrol(app.ControlPanel, 'Style','checkbox', ...
+                'String','z-score variables', 'Value',1, ...
+                'TooltipString','Z-score variables before building network.', ...
+                'Units','normalized', 'Position', app.cellPosition(4,3,1,2));
 
-            app.VariableListBox = uilistbox(app.ControlGrid, 'Items',{}, 'Multiselect','on');
-            app.VariableListBox.Layout.Row = [2 3]; app.VariableListBox.Layout.Column = [3 4];
+            % --- columns 5-6: color, time axis & delay embedding ---
+            app.ColorVarLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','Color by:', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(1,5,1,1));
+            app.ColorVarDropDown = uicontrol(app.ControlPanel, 'Style','popupmenu', ...
+                'String',{'(row index)'}, 'Value',1, ...
+                'Units','normalized', 'Position', app.cellPosition(1,6,1,1));
 
-            app.ZscoreCheckBox = uicheckbox(app.ControlGrid, 'Text','z-score variables', 'Value',true, ...
-                'Tooltip','Z-score variables before building network.');
-            app.ZscoreCheckBox.Layout.Row = 4; app.ZscoreCheckBox.Layout.Column = [3 4];
+            app.ColorVarWorkspaceButton = uicontrol(app.ControlPanel, 'Style','pushbutton', ...
+                'String','Color: Workspace...', 'Units','normalized', ...
+                'Position', app.cellPosition(2,5,1,2), ...
+                'Callback', @(src,evt) app.ColorVarWorkspaceButtonPushed(src,evt));
 
-            % --- band 1, columns 5-6: color, time axis & delay embedding ---
-            app.ColorVarLabel = uilabel(app.ControlGrid, 'Text','Color by:');
-            app.ColorVarLabel.Layout.Row = 1; app.ColorVarLabel.Layout.Column = 5;
-            app.ColorVarDropDown = uidropdown(app.ControlGrid, 'Items',{'(row index)'});
-            app.ColorVarDropDown.Layout.Row = 1; app.ColorVarDropDown.Layout.Column = 6;
+            app.TimeVarLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','Time axis:', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(3,5,1,1));
+            app.TimeVarDropDown = uicontrol(app.ControlPanel, 'Style','popupmenu', ...
+                'String',{'(row index)'}, 'Value',1, ...
+                'Units','normalized', 'Position', app.cellPosition(3,6,1,1));
 
-            app.ColorVarWorkspaceButton = uibutton(app.ControlGrid, 'Text','Color: Workspace...', ...
-                'ButtonPushedFcn', @(btn,event) ColorVarWorkspaceButtonPushed(app));
-            app.ColorVarWorkspaceButton.Layout.Row = 2; app.ColorVarWorkspaceButton.Layout.Column = [5 6];
+            app.EmbedLagLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','embed lag:', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(4,5,1,1));
+            app.EmbedLagEditField = uicontrol(app.ControlPanel, 'Style','edit', ...
+                'String','0', 'Units','normalized', 'Position', app.cellPosition(4,6,1,1));
 
-            app.TimeVarLabel = uilabel(app.ControlGrid, 'Text','Time axis:');
-            app.TimeVarLabel.Layout.Row = 3; app.TimeVarLabel.Layout.Column = 5;
-            app.TimeVarDropDown = uidropdown(app.ControlGrid, 'Items',{'(row index)'});
-            app.TimeVarDropDown.Layout.Row = 3; app.TimeVarDropDown.Layout.Column = 6;
+            app.EmbedOrderLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','embed order:', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(5,5,1,1));
+            app.EmbedOrderEditField = uicontrol(app.ControlPanel, 'Style','edit', ...
+                'String','1', 'Units','normalized', 'Position', app.cellPosition(5,6,1,1));
 
-            app.EmbedLagLabel = uilabel(app.ControlGrid, 'Text','embed lag:');
-            app.EmbedLagLabel.Layout.Row = 4; app.EmbedLagLabel.Layout.Column = 5;
-            app.EmbedLagEditField = uieditfield(app.ControlGrid,'numeric', 'Value',0, 'Limits',[0 Inf], 'RoundFractionalValues','on');
-            app.EmbedLagEditField.Layout.Row = 4; app.EmbedLagEditField.Layout.Column = 6;
+            % --- columns 1-4 (bottom half): graph parameters ---
+            app.KLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','k (neighbors):', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(6,1,1,1));
+            app.KEditField = uicontrol(app.ControlPanel, 'Style','edit', ...
+                'String','3', 'Units','normalized', 'Position', app.cellPosition(6,2,1,1));
 
-            app.EmbedOrderLabel = uilabel(app.ControlGrid, 'Text','embed order:');
-            app.EmbedOrderLabel.Layout.Row = 5; app.EmbedOrderLabel.Layout.Column = 5;
-            app.EmbedOrderEditField = uieditfield(app.ControlGrid,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.EmbedOrderEditField.Layout.Row = 5; app.EmbedOrderEditField.Layout.Column = 6;
+            app.DLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','d (compression):', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(6,3,1,1));
+            app.DEditField = uicontrol(app.ControlPanel, 'Style','edit', ...
+                'String','3', 'Units','normalized', 'Position', app.cellPosition(6,4,1,1));
 
-            % --- band 2, columns 1-4: graph parameters (2 label|field
-            % pairs side by side, since this group has the most fields) ---
-            app.KLabel = uilabel(app.ControlGrid, 'Text','k (neighbors):');
-            app.KLabel.Layout.Row = 6; app.KLabel.Layout.Column = 1;
-            app.KEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.KEditField.Layout.Row = 6; app.KEditField.Layout.Column = 2;
+            app.TExcludeLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','texclude:', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(7,1,1,1));
+            app.TExcludeEditField = uicontrol(app.ControlPanel, 'Style','edit', ...
+                'String','1', 'Units','normalized', 'Position', app.cellPosition(7,2,1,1));
 
-            app.DLabel = uilabel(app.ControlGrid, 'Text','d (compression):');
-            app.DLabel.Layout.Row = 6; app.DLabel.Layout.Column = 3;
-            app.DEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.DEditField.Layout.Row = 6; app.DEditField.Layout.Column = 4;
+            app.MaxDistPrctLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','max dist %ile:', 'HorizontalAlignment','left', ...
+                'TooltipString','max dist percentile', ...
+                'Units','normalized', 'Position', app.cellPosition(7,3,1,1));
+            app.MaxDistPrctEditField = uicontrol(app.ControlPanel, 'Style','edit', ...
+                'String','100', 'Units','normalized', 'Position', app.cellPosition(7,4,1,1));
 
-            app.TExcludeLabel = uilabel(app.ControlGrid, 'Text','texclude:');
-            app.TExcludeLabel.Layout.Row = 7; app.TExcludeLabel.Layout.Column = 1;
-            app.TExcludeEditField = uieditfield(app.ControlGrid,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.TExcludeEditField.Layout.Row = 7; app.TExcludeEditField.Layout.Column = 2;
+            app.MaxDistLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','max dist:', 'HorizontalAlignment','left', ...
+                'TooltipString','max dist (absolute)', ...
+                'Units','normalized', 'Position', app.cellPosition(8,1,1,1));
+            app.MaxDistEditField = uicontrol(app.ControlPanel, 'Style','edit', ...
+                'String','Inf', 'Units','normalized', 'Position', app.cellPosition(8,2,1,1));
 
-            app.MaxDistPrctLabel = uilabel(app.ControlGrid, 'Text','max dist %ile:', ...
-                'Tooltip','max dist percentile');
-            app.MaxDistPrctLabel.Layout.Row = 7; app.MaxDistPrctLabel.Layout.Column = 3;
-            app.MaxDistPrctEditField = uieditfield(app.ControlGrid,'numeric', 'Value',100, 'Limits',[0 100]);
-            app.MaxDistPrctEditField.Layout.Row = 7; app.MaxDistPrctEditField.Layout.Column = 4;
+            app.ReciprocalCheckBox = uicontrol(app.ControlPanel, 'Style','checkbox', ...
+                'String','reciprocal', 'Value',1, ...
+                'Units','normalized', 'Position', app.cellPosition(8,3,1,2));
 
-            app.MaxDistLabel = uilabel(app.ControlGrid, 'Text','max dist:', ...
-                'Tooltip','max dist (absolute)');
-            app.MaxDistLabel.Layout.Row = 8; app.MaxDistLabel.Layout.Column = 1;
-            app.MaxDistEditField = uieditfield(app.ControlGrid,'numeric', 'Value',Inf, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.MaxDistEditField.Layout.Row = 8; app.MaxDistEditField.Layout.Column = 2;
+            % --- columns 5-6 (bottom half): style & build ---
+            app.NodeSizeModeLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','Node size:', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(6,5,1,1));
+            app.NodeSizeModeDropDown = uicontrol(app.ControlPanel, 'Style','popupmenu', ...
+                'String',{'log','rank','original'}, 'Value',1, ...
+                'Units','normalized', 'Position', app.cellPosition(6,6,1,1));
 
-            app.ReciprocalCheckBox = uicheckbox(app.ControlGrid, 'Text','reciprocal', 'Value',true);
-            app.ReciprocalCheckBox.Layout.Row = 8; app.ReciprocalCheckBox.Layout.Column = [3 4];
+            app.LabelMethodLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','Label method:', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(7,5,1,1));
+            app.LabelMethodDropDown = uicontrol(app.ControlPanel, 'Style','popupmenu', ...
+                'String',{'mode','mean','median','none'}, 'Value',1, ...
+                'Units','normalized', 'Position', app.cellPosition(7,6,1,1));
 
-            % --- band 2, columns 5-6: style & build ---
-            app.NodeSizeModeLabel = uilabel(app.ControlGrid, 'Text','Node size:');
-            app.NodeSizeModeLabel.Layout.Row = 6; app.NodeSizeModeLabel.Layout.Column = 5;
-            app.NodeSizeModeDropDown = uidropdown(app.ControlGrid, 'Items',{'log','rank','original'});
-            app.NodeSizeModeDropDown.Layout.Row = 6; app.NodeSizeModeDropDown.Layout.Column = 6;
+            app.BuildButton = uicontrol(app.ControlPanel, 'Style','pushbutton', ...
+                'String','Build Network', 'BackgroundColor',[0.31 0.60 0.95], ...
+                'ForegroundColor','white', 'FontWeight','bold', ...
+                'Units','normalized', 'Position', app.cellPosition(8,5,1,2), ...
+                'Callback', @(src,evt) app.BuildButtonPushed(src,evt));
 
-            app.LabelMethodLabel = uilabel(app.ControlGrid, 'Text','Label method:');
-            app.LabelMethodLabel.Layout.Row = 7; app.LabelMethodLabel.Layout.Column = 5;
-            app.LabelMethodDropDown = uidropdown(app.ControlGrid, 'Items',{'mode','mean','median','none'});
-            app.LabelMethodDropDown.Layout.Row = 7; app.LabelMethodDropDown.Layout.Column = 6;
+            app.StatusLabel = uicontrol(app.ControlPanel, 'Style','text', ...
+                'String','Status:', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(9,5,1,2));
 
-            app.BuildButton = uibutton(app.ControlGrid, 'Text','Build Network', ...
-                'BackgroundColor',[0.31 0.60 0.95], 'FontColor','white', 'FontWeight','bold', ...
-                'ButtonPushedFcn', @(btn,event) BuildButtonPushed(app));
-            app.BuildButton.Layout.Row = 8; app.BuildButton.Layout.Column = [5 6];
-
-            app.StatusLabel = uilabel(app.ControlGrid, 'Text','Status:');
-            app.StatusLabel.Layout.Row = 9; app.StatusLabel.Layout.Column = [5 6];
-
-            app.StatusTextArea = uitextarea(app.ControlGrid, 'Value',{'Load a data file to get started.'}, 'Editable','off');
-            app.StatusTextArea.Layout.Row = 10; app.StatusTextArea.Layout.Column = [5 6];
+            app.StatusTextArea = uicontrol(app.ControlPanel, 'Style','edit', ...
+                'String',{'Load a data file to get started.'}, 'Max',2, 'Min',0, ...
+                'Enable','inactive', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.cellPosition(10,5,1,2));
 
             % ================= bottom: plot panel =================
-            app.PlotPanel = uipanel(app.GridLayout, 'Title','Network');
-            app.PlotPanel.Layout.Row = 2;
-            app.PlotPanel.Layout.Column = 1;
-
-            app.PlotGrid = uigridlayout(app.PlotPanel, [1 2]);
-            app.PlotGrid.Padding = [2 2 2 2];
-            app.PlotGrid.ColumnSpacing = 4;
-
-            app.NetworkAxes = uiaxes(app.PlotGrid);
-            app.NetworkAxes.Layout.Row = 1; app.NetworkAxes.Layout.Column = 1;
+            app.NetworkAxes = axes('Parent', app.PlotPanel, 'Units','normalized', ...
+                'Position',[0.06 0.12 0.40 0.78]);
             title(app.NetworkAxes,'attractor transition network')
 
-            app.RecurrenceAxes = uiaxes(app.PlotGrid);
-            app.RecurrenceAxes.Layout.Row = 1; app.RecurrenceAxes.Layout.Column = 2;
+            app.RecurrenceAxes = axes('Parent', app.PlotPanel, 'Units','normalized', ...
+                'Position',[0.56 0.12 0.40 0.78]);
             title(app.RecurrenceAxes,'geodesic recurrence plot')
         end
     end
@@ -587,11 +603,12 @@ classdef TemporalMapperApp < matlab.apps.AppBase
 
         function app = TemporalMapperApp
             createComponents(app)
-            registerApp(app, app.UIFigure)
         end
 
         function delete(app)
-            delete(app.UIFigure)
+            if isvalid(app.UIFigure)
+                delete(app.UIFigure)
+            end
         end
     end
 end
