@@ -423,21 +423,19 @@ classdef TemporalMapperApp < handle
             end
             L{end+1} = '';
 
-            L{end+1} = sprintf(['plottmgraph(g_simp, colorvar, members, ''nodesizemode'', ''%s'', ' ...
-                '''labelmethod'', ''%s'', ''colorlabel'', %s);'], nodeSizeMode, labelMethod, colorlabelExpr);
-
             if app.ShowRecurrenceCheckBox.Value
-                L{end+1} = '';
-                L{end+1} = 'nodesizevec = cellfun(@length, members);';
-                L{end+1} = 'if all(nodesizevec==1)';
-                L{end+1} = '    D_geo = distances(g_simp,''Method'',''unweighted'');';
-                L{end+1} = 'else';
-                L{end+1} = '    D_geo = TCMdistance(g_simp, members);';
-                L{end+1} = 'end';
+                % plotgraphtcm opens its own figure internally (network
+                % + recurrence plot side by side), so no explicit
+                % figure() call here.
+                L{end+1} = sprintf(['plotgraphtcm(g_simp, colorvar, t, members, ''nodesizemode'', ''%s'', ' ...
+                    '''labelmethod'', ''%s'', ''colorlabel'', %s);'], nodeSizeMode, labelMethod, colorlabelExpr);
+            else
+                % plottmgraph plots into gca by default, reusing an
+                % existing figure if one is open -- open a new one first
+                % so this doesn't overwrite whatever's already on screen.
                 L{end+1} = 'figure;';
-                L{end+1} = 'imagesc(t, t, D_geo); axis square; colormap hot; cb = colorbar;';
-                L{end+1} = 'cb.Label.String = ''path length''; xlabel(''time''); ylabel(''time'');';
-                L{end+1} = 'title(''geodesic recurrence plot'');';
+                L{end+1} = sprintf(['plottmgraph(g_simp, colorvar, members, ''nodesizemode'', ''%s'', ' ...
+                    '''labelmethod'', ''%s'', ''colorlabel'', %s);'], nodeSizeMode, labelMethod, colorlabelExpr);
             end
 
             code = strjoin(L, newline);
