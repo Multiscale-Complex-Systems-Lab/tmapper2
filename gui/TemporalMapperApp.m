@@ -475,7 +475,7 @@ classdef TemporalMapperApp < handle
             % network plots, which get the bulk of the window since they
             % benefit from space far more than the mostly-text/
             % short-field setup controls do.
-            setupH = 0.45;
+            setupH = 0.30;
             panelW = 1/4;
             app.DataPanel = uipanel(app.UIFigure, 'Title','Data', ...
                 'Units','normalized', 'Position',[0*panelW 1-setupH panelW setupH]);
