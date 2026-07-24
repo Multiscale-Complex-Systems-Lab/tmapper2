@@ -97,6 +97,123 @@ app.VariableListBox.Value = 1;
 app.SelectAllButton.Callback(app.SelectAllButton, []);
 assert(isequal(app.VariableListBox.Value, 1:3), 'Select All should select every variable.');
 
+% -- Build/Stop button Enable states after a normal (non-cancelled) build
+app.buildNetwork();
+assert(strcmp(app.BuildButton.Enable,'on') && strcmp(app.StopButton.Enable,'off'), ...
+    'Build should be enabled and Stop disabled again once a normal build completes.');
+
+% -- Plot Options controls should re-render cheaply (not rebuild the
+% network) via their own Callback -- PlotOptionChanged -- rather than
+% needing Build Network clicked again. Cross-check the node/edge count
+% reported by the cheap re-render matches the last real build's.
+tok = regexp(app.StatusTextArea.String{1}, '(\d+) nodes, (\d+) edges', 'tokens');
+builtNodes = str2double(tok{1}{1}); builtEdges = str2double(tok{1}{2});
+
+app.NodeSizeModeDropDown.Value = 2; % 'rank'
+app.NodeSizeModeDropDown.Callback(app.NodeSizeModeDropDown, []);
+assert(contains(app.StatusTextArea.String{1}, 'Re-rendered plot (network unchanged)'), ...
+    'Changing Node size should re-render, not rebuild.');
+tok = regexp(app.StatusTextArea.String{1}, '(\d+) nodes, (\d+) edges', 'tokens');
+assert(str2double(tok{1}{1}) == builtNodes && str2double(tok{1}{2}) == builtEdges, ...
+    'The re-rendered network should be the same one already built (same node/edge count).');
+
+app.LabelMethodDropDown.Value = 2; % 'mean'
+app.LabelMethodDropDown.Callback(app.LabelMethodDropDown, []);
+assert(contains(app.StatusTextArea.String{1}, 'Re-rendered plot (network unchanged)'), ...
+    'Changing Label method should re-render, not rebuild.');
+
+app.ColorVarDropDown.Value = find(strcmp(app.ColorVarDropDown.String, 'x'));
+app.ColorVarDropDown.Callback(app.ColorVarDropDown, []);
+assert(contains(app.StatusTextArea.String{1}, 'Re-rendered plot (network unchanged)'), ...
+    'Changing Color by should re-render, not rebuild.');
+
+app.TimeVarDropDown.Value = find(strcmp(app.TimeVarDropDown.String, 'y'));
+app.TimeVarDropDown.Callback(app.TimeVarDropDown, []);
+assert(contains(app.StatusTextArea.String{1}, 'Re-rendered plot (network unchanged)'), ...
+    'Changing Time axis should re-render, not rebuild.');
+
+app.ShowNodeBorderCheckBox.Value = 1;
+app.ShowNodeBorderCheckBox.Callback(app.ShowNodeBorderCheckBox, []);
+assert(contains(app.StatusTextArea.String{1}, 'Re-rendered plot (network unchanged)'), ...
+    'Toggling Show node border should re-render, not rebuild.');
+app.ShowNodeBorderCheckBox.Value = 0;
+app.ShowNodeBorderCheckBox.Callback(app.ShowNodeBorderCheckBox, []);
+
+app.ShowRecurrenceCheckBox.Value = 0;
+app.ShowRecurrenceCheckBox.Callback(app.ShowRecurrenceCheckBox, []);
+assert(contains(app.StatusTextArea.String{1}, 'Re-rendered plot (network unchanged)'), ...
+    'Toggling Show recurrence plot should re-render, not rebuild.');
+assert(strcmp(app.RecurrenceAxes.Visible, 'off'), 'the re-render should still apply the recurrence-plot toggle.');
+app.ShowRecurrenceCheckBox.Value = 1;
+app.ShowRecurrenceCheckBox.Callback(app.ShowRecurrenceCheckBox, []);
+
+% -- PlotOptionChanged should be a harmless no-op when no network has
+% been built yet (must not error, and must leave the status message
+% from loadData alone since there's nothing to re-render)
+appFresh = TemporalMapperApp;
+appFresh.loadData(T);
+statusBeforeNoop = appFresh.StatusTextArea.String{1};
+appFresh.NodeSizeModeDropDown.Callback(appFresh.NodeSizeModeDropDown, []); % should not error
+assert(strcmp(appFresh.StatusTextArea.String{1}, statusBeforeNoop), ...
+    'PlotOptionChanged should be a no-op (not touch the status text) before any network is built.');
+delete(appFresh);
+
+% -- Reset button: restores parameters/plot options to defaults, but
+% does NOT clear loaded data or the variable selection
+app.KEditField.String = '99';
+app.DEditField.String = '99';
+app.TExcludeEditField.String = '99';
+app.MaxDistPrctEditField.String = '50';
+app.MaxDistEditField.String = '1';
+app.ZscoreCheckBox.Value = 0;
+app.ReciprocalCheckBox.Value = 0;
+app.ShowNodeBorderCheckBox.Value = 1;
+app.VariableListBox.Value = 2;
+app.ResetButton.Callback(app.ResetButton, []);
+assert(strcmp(app.KEditField.String,'3') && strcmp(app.DEditField.String,'3') && ...
+    strcmp(app.TExcludeEditField.String,'1') && strcmp(app.MaxDistPrctEditField.String,'100') && ...
+    strcmp(app.MaxDistEditField.String,'Inf'), 'Reset should restore all numeric fields to their defaults.');
+assert(app.ZscoreCheckBox.Value == 1 && app.ReciprocalCheckBox.Value == 1 && ...
+    app.ShowRecurrenceCheckBox.Value == 1 && app.ShowNodeBorderCheckBox.Value == 0, ...
+    'Reset should restore all checkboxes to their defaults.');
+assert(isequal(app.VariableListBox.Value, 2), 'Reset should NOT change the variable selection.');
+assert(~strcmp(app.FileLabel.String, 'No file loaded.'), 'Reset should NOT clear the loaded data.');
+app.VariableListBox.Value = 1:3;
+app.KEditField.String = '3';
+app.DEditField.String = '2';
+app.TExcludeEditField.String = '5';
+app.buildNetwork();
+
+% -- Stop button: an in-progress build can be cancelled. Since
+% buildNetwork runs synchronously, simulate a real user click with an
+% async timer that fires the Stop button's own Callback shortly after
+% the build starts, on a large-enough synthetic dataset that the build
+% reliably takes longer than the timer delay.
+rng(1);
+Nbig = 3000;
+Tbig = table();
+Tbig.a = cumsum(randn(Nbig,1));
+Tbig.b = cumsum(randn(Nbig,1));
+Tbig.c = cumsum(randn(Nbig,1));
+appBig = TemporalMapperApp;
+appBig.loadData(Tbig);
+appBig.VariableListBox.Value = 1:3;
+appBig.KEditField.String = '5';
+appBig.DEditField.String = '3';
+appBig.TExcludeEditField.String = '2';
+
+cancelTimer = timer('StartDelay', 0.05, ...
+    'TimerFcn', @(~,~) appBig.StopButton.Callback(appBig.StopButton, []));
+cleanupTimer = onCleanup(@() delete(cancelTimer)); %#ok<NASGU>
+start(cancelTimer);
+appBig.buildNetwork();
+stop(cancelTimer);
+assert(strcmp(appBig.StatusTextArea.String{1}, 'Build cancelled.'), ...
+    'an async Stop click during a build should cancel it before it finishes.');
+assert(strcmp(appBig.BuildButton.Enable,'on') && strcmp(appBig.StopButton.Enable,'off'), ...
+    'Build should be re-enabled and Stop disabled again after a cancelled build.');
+delete(appBig);
+
 % -- generateCode: error path
 app3 = TemporalMapperApp;
 assertThrows(@() app3.generateCode(), 'TemporalMapperApp:noData', ...

@@ -77,6 +77,8 @@ classdef TemporalMapperApp < handle
         ShowRecurrenceCheckBox  matlab.ui.control.UIControl
         ShowNodeBorderCheckBox  matlab.ui.control.UIControl
         BuildButton             matlab.ui.control.UIControl
+        StopButton              matlab.ui.control.UIControl
+        ResetButton             matlab.ui.control.UIControl
         CopyCodeButton          matlab.ui.control.UIControl
         StatusLabel             matlab.ui.control.UIControl
         StatusTextArea          matlab.ui.control.UIControl
@@ -91,6 +93,23 @@ classdef TemporalMapperApp < handle
         ExtraColorVarNames = {}  % display names of workspace-sourced color vectors
         ExtraColorVarValues = {} % their values, parallel to ExtraColorVarNames
         DataSourceCode = '% dat = <load your data here as a table, e.g. dat = readtable(''your_file.csv'');>' % how "dat" was obtained, for generateCode
+
+        % cache of the most recently BUILT network (tknndigraph +
+        % filtergraph output), so plot-only option changes can re-render
+        % via renderPlot() without recomputing the expensive part.
+        % LastMembers is the "has a network been built yet" sentinel.
+        LastGSimp = digraph()
+        LastMembers = {}
+        LastRows = []
+        LastTidx = []
+        LastPar = struct()
+        LastK = []
+        LastD = []
+        LastTExclude = []
+        LastOrder = []
+        LastLag = []
+
+        CancelRequested = false % set by StopButtonPushed, checked between build stages
     end
 
     methods (Access = public)
@@ -113,6 +132,11 @@ classdef TemporalMapperApp < handle
             % previous data's row count, so they no longer apply
             app.ExtraColorVarNames = {};
             app.ExtraColorVarValues = {};
+            % a cached network from the previous data no longer applies either
+            app.LastGSimp = digraph();
+            app.LastMembers = {};
+            app.LastRows = [];
+            app.LastTidx = [];
             app.VariableListBox.String = varNames;
             app.VariableListBox.Value = 1:numel(varNames); % select all by default
             app.ColorVarDropDown.String = [{'(row index)'}, varNames];
@@ -155,9 +179,16 @@ classdef TemporalMapperApp < handle
 
         function buildNetwork(app)
             %BUILDNETWORK run tknndigraph -> filtergraph on the currently
-            %selected variables/parameters and render the result into
-            %NetworkAxes/RecurrenceAxes. Used both by the "Build Network"
-            %button and directly by scripts/tests.
+            %selected variables/parameters, cache the result, and render
+            %it into NetworkAxes/RecurrenceAxes. Used both by the "Build
+            %Network" button and directly by scripts/tests.
+            %   Plot-only changes (color/time axis, node size, label
+            %   method, show recurrence/node border) don't need to call
+            %   this again -- they re-render via renderPlot(), which
+            %   reuses the cached network instead of recomputing it.
+            %   Checks CancelRequested between stages so the "Stop"
+            %   button can abort a slow build; this only takes effect
+            %   between stages, not mid-computation within one.
             if isempty(app.DataTable)
                 error('TemporalMapperApp:noData','Load a data file first.');
             end
@@ -165,6 +196,11 @@ classdef TemporalMapperApp < handle
             if isempty(selectedVars)
                 error('TemporalMapperApp:noVars','Select at least one variable to build the network from.');
             end
+
+            app.CancelRequested = false;
+            app.BuildButton.Enable = 'off';
+            app.StopButton.Enable = 'on';
+            enableCleanup = onCleanup(@() app.resetBuildControls()); %#ok<NASGU>
 
             if app.ZscoreCheckBox.Value
                 X_raw = zscore(app.DataTable{:,selectedVars});
@@ -205,13 +241,6 @@ classdef TemporalMapperApp < handle
             rows = (N_raw-N+1):N_raw;
 
             tidx = (1:N)';
-            totalTimer = tic;
-
-            app.StatusTextArea.String = {'Computing pairwise distances...'};
-            drawnow
-            stepTimer = tic;
-            D = pdist2(X,X,'minkowski',2);
-            tDistances = toc(stepTimer);
 
             k = app.parseNumericField(app.KEditField, 'k (neighbors)', 1, Inf, true, false);
             d = app.parseNumericField(app.DEditField, 'd (compression)', 0, Inf, false, true);
@@ -220,8 +249,18 @@ classdef TemporalMapperApp < handle
             maxdist = app.parseNumericField(app.MaxDistEditField, 'max dist', 0, Inf, false, true);
             recip = app.ReciprocalCheckBox.Value;
 
+            totalTimer = tic;
+
+            app.StatusTextArea.String = {'Computing pairwise distances...'};
+            drawnow
+            if app.CancelRequested, app.reportCancelled(); return; end
+            stepTimer = tic;
+            D = pdist2(X,X,'minkowski',2);
+            tDistances = toc(stepTimer);
+
             app.StatusTextArea.String = {sprintf('Distances: %.2fs. Computing k-NN graph...', tDistances)};
             drawnow
+            if app.CancelRequested, app.reportCancelled(); return; end
             stepTimer = tic;
             [g, par] = tknndigraph(D, k, tidx, ...
                 'timeExcludeRange', texclude, ...
@@ -231,9 +270,61 @@ classdef TemporalMapperApp < handle
 
             app.StatusTextArea.String = {sprintf('k-NN graph: %.2fs. Simplifying graph...', tKnn)};
             drawnow
+            if app.CancelRequested, app.reportCancelled(); return; end
             stepTimer = tic;
             [g_simp, members, ~, ~] = filtergraph(g, d, 'reciprocal', recip);
             tSimplify = toc(stepTimer);
+
+            if app.CancelRequested, app.reportCancelled(); return; end
+
+            % cache for cheap plot-only re-renders (see renderPlot)
+            app.LastGSimp = g_simp;
+            app.LastMembers = members;
+            app.LastRows = rows;
+            app.LastTidx = tidx;
+            app.LastPar = par;
+            app.LastK = k;
+            app.LastD = d;
+            app.LastTExclude = texclude;
+            app.LastOrder = order;
+            app.LastLag = lag;
+
+            [tPlotNetwork, tPlotRecurrence, showRecurrence] = app.renderPlot();
+
+            tTotal = toc(totalTimer);
+            if showRecurrence
+                timingLine = sprintf(['Timing (s): distances %.2f, k-NN %.2f, simplify %.2f, ' ...
+                    'network plot %.2f, recurrence plot %.2f, total %.2f.'], ...
+                    tDistances, tKnn, tSimplify, tPlotNetwork, tPlotRecurrence, tTotal);
+            else
+                timingLine = sprintf(['Timing (s): distances %.2f, k-NN %.2f, simplify %.2f, ' ...
+                    'network plot %.2f, total %.2f.'], ...
+                    tDistances, tKnn, tSimplify, tPlotNetwork, tTotal);
+            end
+            app.StatusTextArea.String = { ...
+                sprintf('Built network: %d nodes, %d edges. Resolved max distance = %.4g.', ...
+                    numnodes(g_simp), numedges(g_simp), par.maxNeighborDist), ...
+                timingLine};
+        end
+
+        function [tPlotNetwork, tPlotRecurrence, showRecurrence] = renderPlot(app)
+            %RENDERPLOT re-render the network/recurrence plots from the
+            %most recently BUILT network (see buildNetwork), using
+            %whatever the CURRENT Plot Options controls say -- does not
+            %recompute tknndigraph/filtergraph, so it's cheap and safe
+            %to call every time a plot-only control changes (color/time
+            %axis, node size, label method, show recurrence/node
+            %border). Errors if no network has been built yet.
+            if isempty(app.LastMembers)
+                error('TemporalMapperApp:noNetwork','Build a network first.');
+            end
+            g_simp = app.LastGSimp;
+            members = app.LastMembers;
+            rows = app.LastRows;
+            tidx = app.LastTidx;
+            par = app.LastPar;
+            k = app.LastK; d = app.LastD; texclude = app.LastTExclude;
+            order = app.LastOrder; lag = app.LastLag;
 
             % -- color variable (a DataTable column, a workspace-sourced
             % vector picked via ColorVarWorkspaceButton, or row index)
@@ -261,7 +352,7 @@ classdef TemporalMapperApp < handle
 
             cla(app.NetworkAxes)
             cla(app.RecurrenceAxes)
-            colorbar(app.RecurrenceAxes,'off') % remove any colorbar from a previous build
+            colorbar(app.RecurrenceAxes,'off') % remove any colorbar from a previous render
 
             showRecurrence = app.ShowRecurrenceCheckBox.Value;
             if showRecurrence
@@ -273,8 +364,6 @@ classdef TemporalMapperApp < handle
                 app.RecurrenceAxes.Visible = 'off';
             end
 
-            app.StatusTextArea.String = {sprintf('Simplify: %.2fs. Rendering network plot...', tSimplify)};
-            drawnow
             stepTimer = tic;
             nodeSizeMode = app.NodeSizeModeDropDown.String{app.NodeSizeModeDropDown.Value};
             labelMethod = app.LabelMethodDropDown.String{app.LabelMethodDropDown.Value};
@@ -302,8 +391,6 @@ classdef TemporalMapperApp < handle
 
             tPlotRecurrence = 0;
             if showRecurrence
-                app.StatusTextArea.String = {sprintf('Network plot: %.2fs. Rendering recurrence plot...', tPlotNetwork)};
-                drawnow
                 stepTimer = tic;
                 nodesizevec = cellfun(@length, members);
                 bsingle = all(nodesizevec==1);
@@ -323,20 +410,9 @@ classdef TemporalMapperApp < handle
                 tPlotRecurrence = toc(stepTimer);
             end
 
-            tTotal = toc(totalTimer);
-            if showRecurrence
-                timingLine = sprintf(['Timing (s): distances %.2f, k-NN %.2f, simplify %.2f, ' ...
-                    'network plot %.2f, recurrence plot %.2f, total %.2f.'], ...
-                    tDistances, tKnn, tSimplify, tPlotNetwork, tPlotRecurrence, tTotal);
-            else
-                timingLine = sprintf(['Timing (s): distances %.2f, k-NN %.2f, simplify %.2f, ' ...
-                    'network plot %.2f, total %.2f.'], ...
-                    tDistances, tKnn, tSimplify, tPlotNetwork, tTotal);
-            end
-            app.StatusTextArea.String = { ...
-                sprintf('Built network: %d nodes, %d edges. Resolved max distance = %.4g.', ...
-                    numnodes(g_simp), numedges(g_simp), par.maxNeighborDist), ...
-                timingLine};
+            app.StatusTextArea.String = {sprintf( ...
+                'Re-rendered plot (network unchanged): %d nodes, %d edges.', ...
+                numnodes(g_simp), numedges(g_simp))};
         end
 
         function code = generateCode(app)
@@ -583,6 +659,11 @@ classdef TemporalMapperApp < handle
             v = evalin('base', varNames{idx});
             try
                 app.addColorVarFromWorkspace(varNames{idx}, v);
+                % re-render immediately using the newly-added color
+                % option, same as any other Plot Options change
+                if ~isempty(app.LastMembers)
+                    app.renderPlot();
+                end
             catch ME
                 errordlg(ME.message, 'Load error');
             end
@@ -597,6 +678,40 @@ classdef TemporalMapperApp < handle
             end
         end
 
+        function StopButtonPushed(app, ~, ~)
+            %STOPBUTTONPUSHED request cancellation of an in-progress
+            %build. Checked between stages in buildNetwork (after
+            %distances, after the k-NN graph, after simplification), so
+            %it can't interrupt a single slow stage mid-computation, but
+            %it will stop the build from continuing into the next one.
+            app.CancelRequested = true;
+            app.StatusTextArea.String = {'Cancelling...'};
+            drawnow
+        end
+
+        function ResetButtonPushed(app, ~, ~)
+            %RESETBUTTONPUSHED restore all parameter/plot-option
+            %controls to their defaults (does not clear loaded data or
+            %the variable selection, since reloading data is usually
+            %the expensive/annoying part to redo).
+            app.ZscoreCheckBox.Value = 1;
+            app.EmbedLagEditField.String = '0';
+            app.EmbedOrderEditField.String = '1';
+            app.KEditField.String = '3';
+            app.DEditField.String = '3';
+            app.TExcludeEditField.String = '1';
+            app.MaxDistPrctEditField.String = '100';
+            app.MaxDistEditField.String = 'Inf';
+            app.ReciprocalCheckBox.Value = 1;
+            app.ColorVarDropDown.Value = 1;
+            app.TimeVarDropDown.Value = 1;
+            app.NodeSizeModeDropDown.Value = 1;
+            app.LabelMethodDropDown.Value = 1;
+            app.ShowRecurrenceCheckBox.Value = 1;
+            app.ShowNodeBorderCheckBox.Value = 0;
+            app.StatusTextArea.String = {'Parameters reset to defaults.'};
+        end
+
         function SelectAllButtonPushed(app, ~, ~)
             app.VariableListBox.Value = 1:numel(app.VariableListBox.String);
         end
@@ -609,6 +724,36 @@ classdef TemporalMapperApp < handle
             catch ME
                 errordlg(ME.message, 'Copy code error');
             end
+        end
+
+        function PlotOptionChanged(app, ~, ~)
+            %PLOTOPTIONCHANGED callback shared by every Plot Options
+            %control (color/time axis, node size, label method, show
+            %recurrence/node border): re-renders the cached network's
+            %plot cheaply via renderPlot() instead of rebuilding. A
+            %no-op if nothing has been built yet.
+            if isempty(app.LastMembers)
+                return
+            end
+            try
+                app.renderPlot();
+            catch ME
+                errordlg(ME.message, 'Render error');
+            end
+        end
+
+        function resetBuildControls(app)
+            %RESETBUILDCONTROLS re-enable Build/disable Stop once
+            %buildNetwork finishes, however it exits (success, error, or
+            %cancellation) -- registered via onCleanup in buildNetwork.
+            if isvalid(app.UIFigure)
+                app.BuildButton.Enable = 'on';
+                app.StopButton.Enable = 'off';
+            end
+        end
+
+        function reportCancelled(app)
+            app.StatusTextArea.String = {'Build cancelled.'};
         end
     end
 
@@ -661,7 +806,7 @@ classdef TemporalMapperApp < handle
                 'Units','normalized', 'Position',[0 0 1 1-setupH]);
 
             % ================= panel 1: data, build & status =================
-            nRows = 6;
+            nRows = 7;
             app.LoadDataButton = uicontrol(app.DataPanel, 'Style','pushbutton', ...
                 'String','Load Data...', 'Units','normalized', ...
                 'Position', app.rowPosition(1,nRows,1,2), ...
@@ -682,20 +827,32 @@ classdef TemporalMapperApp < handle
                 'Units','normalized', 'Position', app.rowPosition(3,nRows,1,2), ...
                 'Callback', @(src,evt) app.BuildButtonPushed(src,evt));
 
+            app.StopButton = uicontrol(app.DataPanel, 'Style','pushbutton', ...
+                'String','Stop', 'Enable','off', ...
+                'TooltipString','Cancel an in-progress build. Takes effect between stages (distances/k-NN graph/simplify), not mid-stage.', ...
+                'Units','normalized', 'Position', app.rowPosition(3,nRows,2,2), ...
+                'Callback', @(src,evt) app.StopButtonPushed(src,evt));
+
+            app.ResetButton = uicontrol(app.DataPanel, 'Style','pushbutton', ...
+                'String','Reset', ...
+                'TooltipString','Restore all parameters and plot options to their defaults (keeps loaded data).', ...
+                'Units','normalized', 'Position', app.rowPosition(4,nRows,1,2), ...
+                'Callback', @(src,evt) app.ResetButtonPushed(src,evt));
+
             app.CopyCodeButton = uicontrol(app.DataPanel, 'Style','pushbutton', ...
                 'String','Copy Code', ...
                 'TooltipString','Copy MATLAB code that reproduces this build to the clipboard.', ...
-                'Units','normalized', 'Position', app.rowPosition(3,nRows,2,2), ...
+                'Units','normalized', 'Position', app.rowPosition(4,nRows,2,2), ...
                 'Callback', @(src,evt) app.CopyCodeButtonPushed(src,evt));
 
             app.StatusLabel = uicontrol(app.DataPanel, 'Style','text', ...
                 'String','Status:', 'HorizontalAlignment','left', ...
-                'Units','normalized', 'Position', app.rowPosition(4,nRows,1,1));
+                'Units','normalized', 'Position', app.rowPosition(5,nRows,1,1));
 
             app.StatusTextArea = uicontrol(app.DataPanel, 'Style','edit', ...
                 'String',{'Load a data file to get started.'}, 'Max',2, 'Min',0, ...
                 'Enable','inactive', 'HorizontalAlignment','left', ...
-                'Units','normalized', 'Position', app.rowPosition(5,nRows,1,1,2));
+                'Units','normalized', 'Position', app.rowPosition(6,nRows,1,1,2));
 
             % ================= panel 2: variables & preprocessing =================
             nRows = 7;
@@ -774,7 +931,8 @@ classdef TemporalMapperApp < handle
                 'Units','normalized', 'Position', app.rowPosition(1,nRows,1,2));
             app.ColorVarDropDown = uicontrol(app.PlotOptionsPanel, 'Style','popupmenu', ...
                 'String',{'(row index)'}, 'Value',1, ...
-                'Units','normalized', 'Position', app.rowPosition(1,nRows,2,2));
+                'Units','normalized', 'Position', app.rowPosition(1,nRows,2,2), ...
+                'Callback', @(src,evt) app.PlotOptionChanged(src,evt));
 
             app.ColorVarWorkspaceButton = uicontrol(app.PlotOptionsPanel, 'Style','pushbutton', ...
                 'String','Color by Workspace Variable...', 'Units','normalized', ...
@@ -786,31 +944,36 @@ classdef TemporalMapperApp < handle
                 'Units','normalized', 'Position', app.rowPosition(3,nRows,1,2));
             app.TimeVarDropDown = uicontrol(app.PlotOptionsPanel, 'Style','popupmenu', ...
                 'String',{'(row index)'}, 'Value',1, ...
-                'Units','normalized', 'Position', app.rowPosition(3,nRows,2,2));
+                'Units','normalized', 'Position', app.rowPosition(3,nRows,2,2), ...
+                'Callback', @(src,evt) app.PlotOptionChanged(src,evt));
 
             app.NodeSizeModeLabel = uicontrol(app.PlotOptionsPanel, 'Style','text', ...
                 'String','Node size:', 'HorizontalAlignment','left', ...
                 'Units','normalized', 'Position', app.rowPosition(4,nRows,1,2));
             app.NodeSizeModeDropDown = uicontrol(app.PlotOptionsPanel, 'Style','popupmenu', ...
                 'String',{'log','rank','original'}, 'Value',1, ...
-                'Units','normalized', 'Position', app.rowPosition(4,nRows,2,2));
+                'Units','normalized', 'Position', app.rowPosition(4,nRows,2,2), ...
+                'Callback', @(src,evt) app.PlotOptionChanged(src,evt));
 
             app.LabelMethodLabel = uicontrol(app.PlotOptionsPanel, 'Style','text', ...
                 'String','Label method:', 'HorizontalAlignment','left', ...
                 'Units','normalized', 'Position', app.rowPosition(5,nRows,1,2));
             app.LabelMethodDropDown = uicontrol(app.PlotOptionsPanel, 'Style','popupmenu', ...
                 'String',{'mode','mean','median','none'}, 'Value',1, ...
-                'Units','normalized', 'Position', app.rowPosition(5,nRows,2,2));
+                'Units','normalized', 'Position', app.rowPosition(5,nRows,2,2), ...
+                'Callback', @(src,evt) app.PlotOptionChanged(src,evt));
 
             app.ShowRecurrenceCheckBox = uicontrol(app.PlotOptionsPanel, 'Style','checkbox', ...
                 'String','Show recurrence plot', 'Value',1, ...
                 'TooltipString','Uncheck to show only the network plot, widened to fill the panel.', ...
-                'Units','normalized', 'Position', app.rowPosition(6,nRows,1,2));
+                'Units','normalized', 'Position', app.rowPosition(6,nRows,1,2), ...
+                'Callback', @(src,evt) app.PlotOptionChanged(src,evt));
 
             app.ShowNodeBorderCheckBox = uicontrol(app.PlotOptionsPanel, 'Style','checkbox', ...
                 'String','Show node border', 'Value',0, ...
                 'TooltipString','Overlay a black-outlined scatter marker on each node (plottmgraph''s "nodescatter" option) -- can look cleaner for dense graphs.', ...
-                'Units','normalized', 'Position', app.rowPosition(7,nRows,1,2));
+                'Units','normalized', 'Position', app.rowPosition(7,nRows,1,2), ...
+                'Callback', @(src,evt) app.PlotOptionChanged(src,evt));
 
             % ================= bottom: plot panel =================
             app.NetworkAxes = axes('Parent', app.PlotPanel, 'Units','normalized', ...
