@@ -202,10 +202,13 @@ classdef TemporalMapperApp < handle
             rows = (N_raw-N+1):N_raw;
 
             tidx = (1:N)';
+            totalTimer = tic;
 
             app.StatusTextArea.String = {'Computing pairwise distances...'};
             drawnow
+            stepTimer = tic;
             D = pdist2(X,X,'minkowski',2);
+            tDistances = toc(stepTimer);
 
             k = app.parseNumericField(app.KEditField, 'k (neighbors)', 1, Inf, true, false);
             d = app.parseNumericField(app.DEditField, 'd (compression)', 0, Inf, false, true);
@@ -214,16 +217,20 @@ classdef TemporalMapperApp < handle
             maxdist = app.parseNumericField(app.MaxDistEditField, 'max dist', 0, Inf, false, true);
             recip = app.ReciprocalCheckBox.Value;
 
-            app.StatusTextArea.String = {'Computing k-NN graph...'};
+            app.StatusTextArea.String = {sprintf('Distances: %.2fs. Computing k-NN graph...', tDistances)};
             drawnow
+            stepTimer = tic;
             [g, par] = tknndigraph(D, k, tidx, ...
                 'timeExcludeRange', texclude, ...
                 'maxNeighborDistPrct', maxdistprct, ...
                 'maxNeighborDist', maxdist);
+            tKnn = toc(stepTimer);
 
-            app.StatusTextArea.String = {'Simplifying graph...'};
+            app.StatusTextArea.String = {sprintf('k-NN graph: %.2fs. Simplifying graph...', tKnn)};
             drawnow
+            stepTimer = tic;
             [g_simp, members, ~, ~] = filtergraph(g, d, 'reciprocal', recip);
+            tSimplify = toc(stepTimer);
 
             % -- color variable (a DataTable column, a workspace-sourced
             % vector picked via ColorVarWorkspaceButton, or row index)
@@ -263,8 +270,9 @@ classdef TemporalMapperApp < handle
                 app.RecurrenceAxes.Visible = 'off';
             end
 
-            app.StatusTextArea.String = {'Rendering network plot...'};
+            app.StatusTextArea.String = {sprintf('Simplify: %.2fs. Rendering network plot...', tSimplify)};
             drawnow
+            stepTimer = tic;
             nodeSizeMode = app.NodeSizeModeDropDown.String{app.NodeSizeModeDropDown.Value};
             labelMethod = app.LabelMethodDropDown.String{app.LabelMethodDropDown.Value};
             plottmgraph(g_simp, colorvar, members, 'ax', app.NetworkAxes, ...
@@ -286,10 +294,13 @@ classdef TemporalMapperApp < handle
                 title(app.NetworkAxes, sprintf('k=%g, d=%g, texclude=%g, maxdist=%.4g', ...
                     k, d, texclude, par.maxNeighborDist));
             end
+            tPlotNetwork = toc(stepTimer);
 
+            tPlotRecurrence = 0;
             if showRecurrence
-                app.StatusTextArea.String = {'Rendering recurrence plot...'};
+                app.StatusTextArea.String = {sprintf('Network plot: %.2fs. Rendering recurrence plot...', tPlotNetwork)};
                 drawnow
+                stepTimer = tic;
                 nodesizevec = cellfun(@length, members);
                 bsingle = all(nodesizevec==1);
                 if bsingle
@@ -305,11 +316,23 @@ classdef TemporalMapperApp < handle
                 xlabel(app.RecurrenceAxes,'time')
                 ylabel(app.RecurrenceAxes,'time')
                 title(app.RecurrenceAxes,'geodesic recurrence plot')
+                tPlotRecurrence = toc(stepTimer);
             end
 
-            app.StatusTextArea.String = {sprintf( ...
-                'Built network: %d nodes, %d edges. Resolved max distance = %.4g.', ...
-                numnodes(g_simp), numedges(g_simp), par.maxNeighborDist)};
+            tTotal = toc(totalTimer);
+            if showRecurrence
+                timingLine = sprintf(['Timing (s): distances %.2f, k-NN %.2f, simplify %.2f, ' ...
+                    'network plot %.2f, recurrence plot %.2f, total %.2f.'], ...
+                    tDistances, tKnn, tSimplify, tPlotNetwork, tPlotRecurrence, tTotal);
+            else
+                timingLine = sprintf(['Timing (s): distances %.2f, k-NN %.2f, simplify %.2f, ' ...
+                    'network plot %.2f, total %.2f.'], ...
+                    tDistances, tKnn, tSimplify, tPlotNetwork, tTotal);
+            end
+            app.StatusTextArea.String = { ...
+                sprintf('Built network: %d nodes, %d edges. Resolved max distance = %.4g.', ...
+                    numnodes(g_simp), numedges(g_simp), par.maxNeighborDist), ...
+                timingLine};
         end
     end
 
@@ -475,7 +498,7 @@ classdef TemporalMapperApp < handle
             % network plots, which get the bulk of the window since they
             % benefit from space far more than the mostly-text/
             % short-field setup controls do.
-            setupH = 0.30;
+            setupH = 0.24;
             panelW = 1/4;
             app.DataPanel = uipanel(app.UIFigure, 'Title','Data', ...
                 'Units','normalized', 'Position',[0*panelW 1-setupH panelW setupH]);
