@@ -348,6 +348,9 @@ newFigsDS = setdiff(findobj('Type','figure'), figsBeforeDS);
 assert(numel(baseRows) == ceil(Nrange/4), ...
     sprintf('downsample=4 should keep every 4th row: expected %d rows, got %d.', ceil(Nrange/4), numel(baseRows)));
 assert(size(X,1) == numel(baseRows), 'X should have one row per selected baseRow when embed order is 1.');
+rawStrided = Trange{baseRows, {'x','y','z'}};
+assert(~isequal(filteredVals, rawStrided), ...
+    'downsample>1 should apply an anti-aliasing lowpass filter, not just pick raw strided rows.');
 close(newFigsDS)
 
 % -- row range: start/end row should restrict to exactly that window

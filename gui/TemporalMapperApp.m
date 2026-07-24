@@ -227,10 +227,25 @@ classdef TemporalMapperApp < handle
                     'Row range/downsampling leaves only %d row(s) -- need at least 2.', numel(baseRows));
             end
 
-            if app.ZscoreCheckBox.Value
-                X_raw = zscore(app.DataTable{baseRows,selectedVars});
+            % -- anti-aliasing lowpass filter before downsampling: a plain
+            % strided pick (every Nth row) can alias high-frequency content
+            % in the raw variables into spurious low-frequency structure.
+            % Smoothing over a window the size of the downsample factor
+            % first (movmean -- built into base MATLAB, no toolbox needed)
+            % attenuates that content before it gets aliased. No-op when
+            % downsample==1 (nothing to alias).
+            windowVals = app.DataTable{startRow:endRow,selectedVars};
+            if downsample > 1
+                smoothVals = movmean(windowVals, downsample, 1);
+                filteredVals = smoothVals(1:downsample:end,:);
             else
-                X_raw = app.DataTable{baseRows,selectedVars};
+                filteredVals = windowVals;
+            end
+
+            if app.ZscoreCheckBox.Value
+                X_raw = zscore(filteredVals);
+            else
+                X_raw = filteredVals;
             end
             N_raw = size(X_raw,1);
 
@@ -496,10 +511,20 @@ classdef TemporalMapperApp < handle
             L{end+1} = sprintf('selectedVars = {%s};', varListStr);
             L{end+1} = sprintf('baseRows = %g:%g:%g; %% start row : downsample factor : end row', ...
                 startRow, downsample, endRow);
-            if app.ZscoreCheckBox.Value
-                L{end+1} = 'X = zscore(dat{baseRows,selectedVars});';
+            if downsample > 1
+                L{end+1} = '%% anti-aliasing lowpass filter before downsampling (moving average';
+                L{end+1} = '%% over the downsample window, so striding below doesn''t alias';
+                L{end+1} = '%% high-frequency content into spurious low-frequency structure)';
+                L{end+1} = sprintf('windowVals = dat{%g:%g,selectedVars};', startRow, endRow);
+                L{end+1} = sprintf('smoothVals = movmean(windowVals, %g, 1);', downsample);
+                L{end+1} = sprintf('filteredVals = smoothVals(1:%g:end,:);', downsample);
             else
-                L{end+1} = 'X = dat{baseRows,selectedVars};';
+                L{end+1} = 'filteredVals = dat{baseRows,selectedVars};';
+            end
+            if app.ZscoreCheckBox.Value
+                L{end+1} = 'X = zscore(filteredVals);';
+            else
+                L{end+1} = 'X = filteredVals;';
             end
             L{end+1} = '';
             if order > 1
@@ -961,7 +986,7 @@ classdef TemporalMapperApp < handle
 
             app.DownsampleLabel = uicontrol(app.PreprocessPanel, 'Style','text', ...
                 'String','downsample (N):', 'HorizontalAlignment','left', ...
-                'TooltipString','Keep every Nth row within the selected range (1 = no downsampling).', ...
+                'TooltipString','Keep every Nth row within the selected range (1 = no downsampling); a moving-average lowpass is applied first to avoid aliasing.', ...
                 'Units','normalized', 'Position', app.rowPosition(8,nRows,1,2));
             app.DownsampleEditField = uicontrol(app.PreprocessPanel, 'Style','edit', ...
                 'String','1', 'Units','normalized', 'Position', app.rowPosition(8,nRows,2,2));
