@@ -51,6 +51,15 @@ classdef TemporalMapperApp < matlab.apps.AppBase
     live app, independent of window/screen size. Fixed by flattening:
     ControlGrid is now a single grid with every control placed directly
     via row/column spans, removing that extra nesting level entirely.
+    (7-23-2026) fix: flattening fixed the rendering, but confirmed on
+    real hardware that cramming all 5 groups into 1 row of 12 columns
+    still needed more width than the actual window/screen gave it --
+    content ran past the window's real edge instead of shrinking to
+    fit. Restructured into 2 stacked row-bands of 6 columns each
+    (halving the width any single row needs), and the window now
+    requests a size derived from get(0,'ScreenSize') instead of a
+    hardcoded guess, so it can never ask for more room than the screen
+    actually has.
     %}
 
     properties (Access = public)
@@ -410,35 +419,45 @@ classdef TemporalMapperApp < matlab.apps.AppBase
     methods (Access = private)
 
         function createComponents(app)
-            app.UIFigure = uifigure('Name','Temporal Mapper','Position',[100 100 1150 820]);
+            % request a size guaranteed to fit the actual screen, rather
+            % than a hardcoded guess -- a too-wide request can end up
+            % force-shrunk by the OS/display without the grid content
+            % being recomputed to match, which is what caused columns to
+            % run past the window's real edge even though this class's
+            % own layout math (and every component's own Position) was
+            % internally consistent.
+            screenSize = get(0,'ScreenSize');
+            figW = min(1000, 0.85*screenSize(3));
+            figH = min(820, 0.85*screenSize(4));
+            app.UIFigure = uifigure('Name','Temporal Mapper','Position',[100 100 figW figH]);
 
             % top: setup (horizontal); bottom: network (gets the bulk of
             % the window, since the plots benefit from space far more
             % than the mostly-text/short-field setup controls do)
             app.GridLayout = uigridlayout(app.UIFigure, [2 1]);
-            app.GridLayout.RowHeight = {230, '1x'};
+            app.GridLayout.RowHeight = {380, '1x'};
 
             % ================= top: control panel =================
             app.ControlPanel = uipanel(app.GridLayout, 'Title','Setup');
             app.ControlPanel.Layout.Row = 1;
             app.ControlPanel.Layout.Column = 1;
 
-            % Single flat grid (no nested per-section sub-grids): every
-            % control placed directly via row/column spans. An earlier
-            % version nested a sub-grid per group (data/variables/color/
-            % params/build) inside this one -- that extra nesting level,
-            % combined with the outer Setup-on-top/Network-below split
-            % below, silently failed to render the later-created groups
-            % entirely (confirmed with a minimal, isolated reproducer
-            % unrelated to any screenshot tool: same content renders
-            % fine with one less level of nesting). Grouping is now
-            % expressed purely through column position, not containment.
-            app.ControlGrid = uigridlayout(app.ControlPanel, [5 12]);
-            app.ControlGrid.RowHeight = {28,28,28,28,'1x'};
+            % Single flat grid (no nested per-section sub-grids -- see
+            % note in the 7-23-2026 changelog above about why nesting
+            % broke rendering). Laid out as 2 stacked row-bands of 6
+            % columns each (data/variables/color on top, params/build
+            % below) rather than 1 row of 12 columns: cramming
+            % everything into one row needed more width than the actual
+            % window/screen provided, and content simply ran past the
+            % window's edge instead of shrinking to fit (confirmed on
+            % real hardware). Halving the columns-per-row halves the
+            % width any single row needs.
+            app.ControlGrid = uigridlayout(app.ControlPanel, [10 6]);
+            app.ControlGrid.RowHeight = {28,28,28,28,28, 28,28,28,28,'1x'};
             app.ControlGrid.ColumnSpacing = 8;
             app.ControlGrid.RowSpacing = 6;
 
-            % --- columns 1-2: data ---
+            % --- band 1, columns 1-2: data ---
             app.LoadDataButton = uibutton(app.ControlGrid, 'Text','Load Data...', ...
                 'ButtonPushedFcn', @(btn,event) LoadDataButtonPushed(app));
             app.LoadDataButton.Layout.Row = 1; app.LoadDataButton.Layout.Column = [1 2];
@@ -450,7 +469,7 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             app.FileLabel = uilabel(app.ControlGrid, 'Text','No file loaded.');
             app.FileLabel.Layout.Row = 3; app.FileLabel.Layout.Column = [1 2];
 
-            % --- columns 3-4: variables ---
+            % --- band 1, columns 3-4: variables ---
             app.VariablesLabel = uilabel(app.ControlGrid, 'Text','Variables:', ...
                 'Tooltip','Ctrl/shift-click to select multiple.');
             app.VariablesLabel.Layout.Row = 1; app.VariablesLabel.Layout.Column = 3;
@@ -466,7 +485,7 @@ classdef TemporalMapperApp < matlab.apps.AppBase
                 'Tooltip','Z-score variables before building network.');
             app.ZscoreCheckBox.Layout.Row = 4; app.ZscoreCheckBox.Layout.Column = [3 4];
 
-            % --- columns 5-6: color, time axis & delay embedding ---
+            % --- band 1, columns 5-6: color, time axis & delay embedding ---
             app.ColorVarLabel = uilabel(app.ControlGrid, 'Text','Color by:');
             app.ColorVarLabel.Layout.Row = 1; app.ColorVarLabel.Layout.Column = 5;
             app.ColorVarDropDown = uidropdown(app.ControlGrid, 'Items',{'(row index)'});
@@ -491,59 +510,59 @@ classdef TemporalMapperApp < matlab.apps.AppBase
             app.EmbedOrderEditField = uieditfield(app.ControlGrid,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
             app.EmbedOrderEditField.Layout.Row = 5; app.EmbedOrderEditField.Layout.Column = 6;
 
-            % --- columns 7-10: graph parameters (2 label|field pairs
-            % side by side, since this group has the most fields) ---
+            % --- band 2, columns 1-4: graph parameters (2 label|field
+            % pairs side by side, since this group has the most fields) ---
             app.KLabel = uilabel(app.ControlGrid, 'Text','k (neighbors):');
-            app.KLabel.Layout.Row = 1; app.KLabel.Layout.Column = 7;
+            app.KLabel.Layout.Row = 6; app.KLabel.Layout.Column = 1;
             app.KEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.KEditField.Layout.Row = 1; app.KEditField.Layout.Column = 8;
+            app.KEditField.Layout.Row = 6; app.KEditField.Layout.Column = 2;
 
             app.DLabel = uilabel(app.ControlGrid, 'Text','d (compression):');
-            app.DLabel.Layout.Row = 1; app.DLabel.Layout.Column = 9;
+            app.DLabel.Layout.Row = 6; app.DLabel.Layout.Column = 3;
             app.DEditField = uieditfield(app.ControlGrid,'numeric', 'Value',3, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.DEditField.Layout.Row = 1; app.DEditField.Layout.Column = 10;
+            app.DEditField.Layout.Row = 6; app.DEditField.Layout.Column = 4;
 
             app.TExcludeLabel = uilabel(app.ControlGrid, 'Text','texclude:');
-            app.TExcludeLabel.Layout.Row = 2; app.TExcludeLabel.Layout.Column = 7;
+            app.TExcludeLabel.Layout.Row = 7; app.TExcludeLabel.Layout.Column = 1;
             app.TExcludeEditField = uieditfield(app.ControlGrid,'numeric', 'Value',1, 'Limits',[1 Inf], 'RoundFractionalValues','on');
-            app.TExcludeEditField.Layout.Row = 2; app.TExcludeEditField.Layout.Column = 8;
+            app.TExcludeEditField.Layout.Row = 7; app.TExcludeEditField.Layout.Column = 2;
 
             app.MaxDistPrctLabel = uilabel(app.ControlGrid, 'Text','max dist %ile:', ...
                 'Tooltip','max dist percentile');
-            app.MaxDistPrctLabel.Layout.Row = 2; app.MaxDistPrctLabel.Layout.Column = 9;
+            app.MaxDistPrctLabel.Layout.Row = 7; app.MaxDistPrctLabel.Layout.Column = 3;
             app.MaxDistPrctEditField = uieditfield(app.ControlGrid,'numeric', 'Value',100, 'Limits',[0 100]);
-            app.MaxDistPrctEditField.Layout.Row = 2; app.MaxDistPrctEditField.Layout.Column = 10;
+            app.MaxDistPrctEditField.Layout.Row = 7; app.MaxDistPrctEditField.Layout.Column = 4;
 
             app.MaxDistLabel = uilabel(app.ControlGrid, 'Text','max dist:', ...
                 'Tooltip','max dist (absolute)');
-            app.MaxDistLabel.Layout.Row = 3; app.MaxDistLabel.Layout.Column = 7;
+            app.MaxDistLabel.Layout.Row = 8; app.MaxDistLabel.Layout.Column = 1;
             app.MaxDistEditField = uieditfield(app.ControlGrid,'numeric', 'Value',Inf, 'Limits',[0 Inf], 'LowerLimitInclusive','off');
-            app.MaxDistEditField.Layout.Row = 3; app.MaxDistEditField.Layout.Column = 8;
+            app.MaxDistEditField.Layout.Row = 8; app.MaxDistEditField.Layout.Column = 2;
 
             app.ReciprocalCheckBox = uicheckbox(app.ControlGrid, 'Text','reciprocal', 'Value',true);
-            app.ReciprocalCheckBox.Layout.Row = 3; app.ReciprocalCheckBox.Layout.Column = [9 10];
+            app.ReciprocalCheckBox.Layout.Row = 8; app.ReciprocalCheckBox.Layout.Column = [3 4];
 
-            % --- columns 11-12: style & build ---
+            % --- band 2, columns 5-6: style & build ---
             app.NodeSizeModeLabel = uilabel(app.ControlGrid, 'Text','Node size:');
-            app.NodeSizeModeLabel.Layout.Row = 1; app.NodeSizeModeLabel.Layout.Column = 11;
+            app.NodeSizeModeLabel.Layout.Row = 6; app.NodeSizeModeLabel.Layout.Column = 5;
             app.NodeSizeModeDropDown = uidropdown(app.ControlGrid, 'Items',{'log','rank','original'});
-            app.NodeSizeModeDropDown.Layout.Row = 1; app.NodeSizeModeDropDown.Layout.Column = 12;
+            app.NodeSizeModeDropDown.Layout.Row = 6; app.NodeSizeModeDropDown.Layout.Column = 6;
 
             app.LabelMethodLabel = uilabel(app.ControlGrid, 'Text','Label method:');
-            app.LabelMethodLabel.Layout.Row = 2; app.LabelMethodLabel.Layout.Column = 11;
+            app.LabelMethodLabel.Layout.Row = 7; app.LabelMethodLabel.Layout.Column = 5;
             app.LabelMethodDropDown = uidropdown(app.ControlGrid, 'Items',{'mode','mean','median','none'});
-            app.LabelMethodDropDown.Layout.Row = 2; app.LabelMethodDropDown.Layout.Column = 12;
+            app.LabelMethodDropDown.Layout.Row = 7; app.LabelMethodDropDown.Layout.Column = 6;
 
             app.BuildButton = uibutton(app.ControlGrid, 'Text','Build Network', ...
                 'BackgroundColor',[0.31 0.60 0.95], 'FontColor','white', 'FontWeight','bold', ...
                 'ButtonPushedFcn', @(btn,event) BuildButtonPushed(app));
-            app.BuildButton.Layout.Row = 3; app.BuildButton.Layout.Column = [11 12];
+            app.BuildButton.Layout.Row = 8; app.BuildButton.Layout.Column = [5 6];
 
             app.StatusLabel = uilabel(app.ControlGrid, 'Text','Status:');
-            app.StatusLabel.Layout.Row = 4; app.StatusLabel.Layout.Column = [11 12];
+            app.StatusLabel.Layout.Row = 9; app.StatusLabel.Layout.Column = [5 6];
 
             app.StatusTextArea = uitextarea(app.ControlGrid, 'Value',{'Load a data file to get started.'}, 'Editable','off');
-            app.StatusTextArea.Layout.Row = 5; app.StatusTextArea.Layout.Column = [11 12];
+            app.StatusTextArea.Layout.Row = 10; app.StatusTextArea.Layout.Column = [5 6];
 
             % ================= bottom: plot panel =================
             app.PlotPanel = uipanel(app.GridLayout, 'Title','Network');
