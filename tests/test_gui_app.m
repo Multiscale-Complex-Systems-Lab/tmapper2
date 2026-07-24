@@ -165,6 +165,9 @@ app.DEditField.String = '99';
 app.TExcludeEditField.String = '99';
 app.MaxDistPrctEditField.String = '50';
 app.MaxDistEditField.String = '1';
+app.RangeStartEditField.String = '10';
+app.RangeEndEditField.String = '150';
+app.DownsampleEditField.String = '3';
 app.ZscoreCheckBox.Value = 0;
 app.ReciprocalCheckBox.Value = 0;
 app.ShowNodeBorderCheckBox.Value = 1;
@@ -173,6 +176,9 @@ app.ResetButton.Callback(app.ResetButton, []);
 assert(strcmp(app.KEditField.String,'3') && strcmp(app.DEditField.String,'3') && ...
     strcmp(app.TExcludeEditField.String,'1') && strcmp(app.MaxDistPrctEditField.String,'100') && ...
     strcmp(app.MaxDistEditField.String,'Inf'), 'Reset should restore all numeric fields to their defaults.');
+assert(strcmp(app.RangeStartEditField.String,'1') && strcmp(app.RangeEndEditField.String,'Inf') && ...
+    strcmp(app.DownsampleEditField.String,'1'), ...
+    'Reset should restore the row range/downsample fields to their defaults.');
 assert(app.ZscoreCheckBox.Value == 1 && app.ReciprocalCheckBox.Value == 1 && ...
     app.ShowRecurrenceCheckBox.Value == 1 && app.ShowNodeBorderCheckBox.Value == 0, ...
     'Reset should restore all checkboxes to their defaults.');
@@ -293,6 +299,74 @@ close(preexistingFig)
 
 app.ShowRecurrenceCheckBox.Value = 1;
 app.ShowNodeBorderCheckBox.Value = 0;
+
+% -- preprocessing: row range & downsampling. Trange.z equals its own
+% row index, so cross-checking dat.z(baseRows) against the expected
+% window verifies the right ORIGINAL rows were selected.
+rng(2);
+Nrange = 200;
+Trange = table();
+Trange.x = sin((1:Nrange)'/10);
+Trange.y = cos((1:Nrange)'/10);
+Trange.z = (1:Nrange)';
+
+appRange = TemporalMapperApp;
+appRange.loadData(Trange);
+appRange.VariableListBox.Value = 1:3;
+appRange.KEditField.String = '3';
+appRange.DEditField.String = '2';
+appRange.TExcludeEditField.String = '5';
+
+assert(strcmp(appRange.RangeStartEditField.String,'1') && ...
+    strcmp(appRange.RangeEndEditField.String,'Inf') && ...
+    strcmp(appRange.DownsampleEditField.String,'1'), ...
+    'Row range/downsample fields should default to start=1, end=Inf, downsample=1.');
+
+appRange.RangeStartEditField.String = '150';
+appRange.RangeEndEditField.String = '100';
+assertThrows(@() appRange.buildNetwork(), 'TemporalMapperApp:invalidRange', ...
+    'buildNetwork should reject a start row greater than the end row.');
+
+appRange.RangeStartEditField.String = '1';
+appRange.RangeEndEditField.String = '1';
+appRange.DownsampleEditField.String = '1';
+assertThrows(@() appRange.buildNetwork(), 'TemporalMapperApp:invalidRange', ...
+    'buildNetwork should reject a range/downsample combination leaving fewer than 2 rows.');
+
+% -- downsampling: cross-check via generateCode's resolved baseRows/X,
+% since the cached network internals are private to the app
+appRange.RangeStartEditField.String = '1';
+appRange.RangeEndEditField.String = 'Inf';
+appRange.DownsampleEditField.String = '4';
+appRange.buildNetwork();
+codeDownsample = appRange.generateCode();
+runnableDownsample = strrep(codeDownsample, placeholder, 'dat = Trange;');
+runnableDownsample = strrep(runnableDownsample, 'addpath("tmapper_tools/")', '');
+figsBeforeDS = findobj('Type','figure');
+eval(runnableDownsample);
+newFigsDS = setdiff(findobj('Type','figure'), figsBeforeDS);
+assert(numel(baseRows) == ceil(Nrange/4), ...
+    sprintf('downsample=4 should keep every 4th row: expected %d rows, got %d.', ceil(Nrange/4), numel(baseRows)));
+assert(size(X,1) == numel(baseRows), 'X should have one row per selected baseRow when embed order is 1.');
+close(newFigsDS)
+
+% -- row range: start/end row should restrict to exactly that window
+appRange.RangeStartEditField.String = '50';
+appRange.RangeEndEditField.String = '150';
+appRange.DownsampleEditField.String = '1';
+appRange.buildNetwork();
+codeRange = appRange.generateCode();
+runnableRange = strrep(codeRange, placeholder, 'dat = Trange;');
+runnableRange = strrep(runnableRange, 'addpath("tmapper_tools/")', '');
+figsBeforeR = findobj('Type','figure');
+eval(runnableRange);
+newFigsR = setdiff(findobj('Type','figure'), figsBeforeR);
+assert(isequal(baseRows, 50:150), 'start row=50, end row=150, downsample=1 should select rows 50:150.');
+assert(isequal(dat.z(baseRows), (50:150)'), ...
+    'the selected rows should correspond to the requested window of the original table.');
+close(newFigsR)
+
+delete(appRange);
 
 delete(app);
 close all

@@ -50,6 +50,12 @@ classdef TemporalMapperApp < handle
         SelectAllButton         matlab.ui.control.UIControl
         VariableListBox         matlab.ui.control.UIControl
         ZscoreCheckBox          matlab.ui.control.UIControl
+        RangeStartLabel         matlab.ui.control.UIControl
+        RangeStartEditField     matlab.ui.control.UIControl
+        RangeEndLabel           matlab.ui.control.UIControl
+        RangeEndEditField       matlab.ui.control.UIControl
+        DownsampleLabel         matlab.ui.control.UIControl
+        DownsampleEditField     matlab.ui.control.UIControl
         EmbedLagLabel           matlab.ui.control.UIControl
         EmbedLagEditField       matlab.ui.control.UIControl
         EmbedOrderLabel         matlab.ui.control.UIControl
@@ -108,6 +114,7 @@ classdef TemporalMapperApp < handle
         LastTExclude = []
         LastOrder = []
         LastLag = []
+        LastDownsample = []
 
         CancelRequested = false % set by StopButtonPushed, checked between build stages
     end
@@ -202,10 +209,28 @@ classdef TemporalMapperApp < handle
             app.StopButton.Enable = 'on';
             enableCleanup = onCleanup(@() app.resetBuildControls()); %#ok<NASGU>
 
+            % -- restrict to a row range and/or downsample BEFORE
+            % z-scoring/embedding, so those steps see only the rows the
+            % user actually wants included. 'end row' uses Inf as a
+            % sentinel for "the last row" (same convention as the max
+            % dist fields below), clamped to the data's actual height.
+            N_full = height(app.DataTable);
+            startRow = app.parseNumericField(app.RangeStartEditField, 'start row', 1, N_full, true, false);
+            endRow = min(app.parseNumericField(app.RangeEndEditField, 'end row', 1, Inf, true, false), N_full);
+            if endRow < startRow
+                error('TemporalMapperApp:invalidRange', 'End row must be greater than or equal to start row.');
+            end
+            downsample = app.parseNumericField(app.DownsampleEditField, 'downsample factor', 1, Inf, true, false);
+            baseRows = startRow:downsample:endRow;
+            if numel(baseRows) < 2
+                error('TemporalMapperApp:invalidRange', ...
+                    'Row range/downsampling leaves only %d row(s) -- need at least 2.', numel(baseRows));
+            end
+
             if app.ZscoreCheckBox.Value
-                X_raw = zscore(app.DataTable{:,selectedVars});
+                X_raw = zscore(app.DataTable{baseRows,selectedVars});
             else
-                X_raw = app.DataTable{:,selectedVars};
+                X_raw = app.DataTable{baseRows,selectedVars};
             end
             N_raw = size(X_raw,1);
 
@@ -236,9 +261,11 @@ classdef TemporalMapperApp < handle
                 N = N_raw;
                 X = X_raw;
             end
-            % original rows aligned with each embedded state (the most
-            % recent slice, since embedding above stacks past->present)
-            rows = (N_raw-N+1):N_raw;
+            % original DataTable rows aligned with each embedded state
+            % (the most recent slice, since embedding above stacks
+            % past->present), mapped back through baseRows since X_raw
+            % may already be a range-restricted/downsampled subset.
+            rows = baseRows((N_raw-N+1):N_raw);
 
             tidx = (1:N)';
 
@@ -288,6 +315,7 @@ classdef TemporalMapperApp < handle
             app.LastTExclude = texclude;
             app.LastOrder = order;
             app.LastLag = lag;
+            app.LastDownsample = downsample;
 
             [tPlotNetwork, tPlotRecurrence, showRecurrence] = app.renderPlot();
 
@@ -324,7 +352,7 @@ classdef TemporalMapperApp < handle
             tidx = app.LastTidx;
             par = app.LastPar;
             k = app.LastK; d = app.LastD; texclude = app.LastTExclude;
-            order = app.LastOrder; lag = app.LastLag;
+            order = app.LastOrder; lag = app.LastLag; downsample = app.LastDownsample;
 
             % -- color variable (a DataTable column, a workspace-sourced
             % vector picked via ColorVarWorkspaceButton, or row index)
@@ -390,13 +418,14 @@ classdef TemporalMapperApp < handle
             % while 'equal' (already set inside plottmgraph) keeps the
             % 1:1 aspect so the network isn't visually distorted.
             axis(app.NetworkAxes,'tight')
+            titleStr = sprintf('k=%g, d=%g, texclude=%g, maxdist=%.4g', k, d, texclude, par.maxNeighborDist);
             if order > 1
-                title(app.NetworkAxes, sprintf('k=%g, d=%g, texclude=%g, maxdist=%.4g, lag=%g, order=%g', ...
-                    k, d, texclude, par.maxNeighborDist, lag, order));
-            else
-                title(app.NetworkAxes, sprintf('k=%g, d=%g, texclude=%g, maxdist=%.4g', ...
-                    k, d, texclude, par.maxNeighborDist));
+                titleStr = [titleStr sprintf(', lag=%g, order=%g', lag, order)];
             end
+            if downsample > 1
+                titleStr = [titleStr sprintf(', downsample=%g', downsample)];
+            end
+            title(app.NetworkAxes, titleStr);
             tPlotNetwork = toc(stepTimer);
 
             tPlotRecurrence = 0;
@@ -440,6 +469,13 @@ classdef TemporalMapperApp < handle
             end
             varListStr = strjoin(cellfun(@(v) ['''' v ''''], selectedVars, 'UniformOutput',false), ', ');
 
+            N_full = height(app.DataTable);
+            startRow = app.parseNumericField(app.RangeStartEditField, 'start row', 1, N_full, true, false);
+            endRow = min(app.parseNumericField(app.RangeEndEditField, 'end row', 1, Inf, true, false), N_full);
+            if endRow < startRow
+                error('TemporalMapperApp:invalidRange', 'End row must be greater than or equal to start row.');
+            end
+            downsample = app.parseNumericField(app.DownsampleEditField, 'downsample factor', 1, Inf, true, false);
             lag = app.parseNumericField(app.EmbedLagEditField, 'embed lag', 0, Inf, true, false);
             order = app.parseNumericField(app.EmbedOrderEditField, 'embed order', 1, Inf, true, false);
             k = app.parseNumericField(app.KEditField, 'k (neighbors)', 1, Inf, true, false);
@@ -458,10 +494,12 @@ classdef TemporalMapperApp < handle
             L{end+1} = app.DataSourceCode;
             L{end+1} = '';
             L{end+1} = sprintf('selectedVars = {%s};', varListStr);
+            L{end+1} = sprintf('baseRows = %g:%g:%g; %% start row : downsample factor : end row', ...
+                startRow, downsample, endRow);
             if app.ZscoreCheckBox.Value
-                L{end+1} = 'X = zscore(dat{:,selectedVars});';
+                L{end+1} = 'X = zscore(dat{baseRows,selectedVars});';
             else
-                L{end+1} = 'X = dat{:,selectedVars};';
+                L{end+1} = 'X = dat{baseRows,selectedVars};';
             end
             L{end+1} = '';
             if order > 1
@@ -474,11 +512,11 @@ classdef TemporalMapperApp < handle
                 L{end+1} = 'for j = 1:order';
                 L{end+1} = '    X_embed(:, (j-1)*nvars + (1:nvars)) = X((j-1)*lag + (1:N), :);';
                 L{end+1} = 'end';
-                L{end+1} = 'rows = (N_raw-N+1):N_raw;';
+                L{end+1} = 'rows = baseRows((N_raw-N+1):N_raw);';
                 L{end+1} = 'X = X_embed;';
                 L{end+1} = '';
             else
-                L{end+1} = 'rows = 1:size(X,1);';
+                L{end+1} = 'rows = baseRows;';
             end
             L{end+1} = 'tidx = (1:size(X,1))'';';
             L{end+1} = 'D = pdist2(X,X,''minkowski'',2);';
@@ -542,13 +580,20 @@ classdef TemporalMapperApp < handle
             % giving the network more of the figure to fill -- same fix
             % applied to the app's own NetworkAxes.
             L{end+1} = 'axis(h1,''tight'')';
+            % titleFmt is inserted below via %s (not processed as a format
+            % string itself), so it holds single, not doubled, percents --
+            % it IS the literal text that should appear in the generated code.
+            titleFmt = 'k=%g, d=%g, texclude=%g, maxdist=%.4g';
+            titleArgs = sprintf('%g, %g, %g, par.maxNeighborDist', k, d, texclude);
             if order > 1
-                L{end+1} = sprintf(['title(h1, sprintf(''k=%%g, d=%%g, texclude=%%g, maxdist=%%.4g, ' ...
-                    'lag=%%g, order=%%g'', %g, %g, %g, par.maxNeighborDist, %g, %g));'], k, d, texclude, lag, order);
-            else
-                L{end+1} = sprintf(['title(h1, sprintf(''k=%%g, d=%%g, texclude=%%g, maxdist=%%.4g'', ' ...
-                    '%g, %g, %g, par.maxNeighborDist));'], k, d, texclude);
+                titleFmt = [titleFmt ', lag=%g, order=%g'];
+                titleArgs = [titleArgs sprintf(', %g, %g', lag, order)];
             end
+            if downsample > 1
+                titleFmt = [titleFmt ', downsample=%g'];
+                titleArgs = [titleArgs sprintf(', %g', downsample)];
+            end
+            L{end+1} = sprintf('title(h1, sprintf(''%s'', %s));', titleFmt, titleArgs);
 
             code = strjoin(L, newline);
         end
@@ -705,6 +750,9 @@ classdef TemporalMapperApp < handle
             %the variable selection, since reloading data is usually
             %the expensive/annoying part to redo).
             app.ZscoreCheckBox.Value = 1;
+            app.RangeStartEditField.String = '1';
+            app.RangeEndEditField.String = 'Inf';
+            app.DownsampleEditField.String = '1';
             app.EmbedLagEditField.String = '0';
             app.EmbedOrderEditField.String = '1';
             app.KEditField.String = '3';
@@ -879,7 +927,7 @@ classdef TemporalMapperApp < handle
                 'Units','normalized', 'Position', app.rowPosition(6,nRows,1,1,2));
 
             % ================= panel 2: variables & preprocessing =================
-            nRows = 7;
+            nRows = 10;
             app.VariablesLabel = uicontrol(app.PreprocessPanel, 'Style','text', ...
                 'String','Variables:', 'HorizontalAlignment','left', ...
                 'TooltipString','Ctrl/shift-click to select multiple.', ...
@@ -898,17 +946,37 @@ classdef TemporalMapperApp < handle
                 'TooltipString','Z-score variables before building network.', ...
                 'Units','normalized', 'Position', app.rowPosition(5,nRows,1,1));
 
+            app.RangeStartLabel = uicontrol(app.PreprocessPanel, 'Style','text', ...
+                'String','start row:', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.rowPosition(6,nRows,1,2));
+            app.RangeStartEditField = uicontrol(app.PreprocessPanel, 'Style','edit', ...
+                'String','1', 'Units','normalized', 'Position', app.rowPosition(6,nRows,2,2));
+
+            app.RangeEndLabel = uicontrol(app.PreprocessPanel, 'Style','text', ...
+                'String','end row:', 'HorizontalAlignment','left', ...
+                'Units','normalized', 'Position', app.rowPosition(7,nRows,1,2));
+            app.RangeEndEditField = uicontrol(app.PreprocessPanel, 'Style','edit', ...
+                'String','Inf', 'TooltipString','Inf means the last row of the loaded data.', ...
+                'Units','normalized', 'Position', app.rowPosition(7,nRows,2,2));
+
+            app.DownsampleLabel = uicontrol(app.PreprocessPanel, 'Style','text', ...
+                'String','downsample (N):', 'HorizontalAlignment','left', ...
+                'TooltipString','Keep every Nth row within the selected range (1 = no downsampling).', ...
+                'Units','normalized', 'Position', app.rowPosition(8,nRows,1,2));
+            app.DownsampleEditField = uicontrol(app.PreprocessPanel, 'Style','edit', ...
+                'String','1', 'Units','normalized', 'Position', app.rowPosition(8,nRows,2,2));
+
             app.EmbedLagLabel = uicontrol(app.PreprocessPanel, 'Style','text', ...
                 'String','embed lag:', 'HorizontalAlignment','left', ...
-                'Units','normalized', 'Position', app.rowPosition(6,nRows,1,2));
+                'Units','normalized', 'Position', app.rowPosition(9,nRows,1,2));
             app.EmbedLagEditField = uicontrol(app.PreprocessPanel, 'Style','edit', ...
-                'String','0', 'Units','normalized', 'Position', app.rowPosition(6,nRows,2,2));
+                'String','0', 'Units','normalized', 'Position', app.rowPosition(9,nRows,2,2));
 
             app.EmbedOrderLabel = uicontrol(app.PreprocessPanel, 'Style','text', ...
                 'String','embed order:', 'HorizontalAlignment','left', ...
-                'Units','normalized', 'Position', app.rowPosition(7,nRows,1,2));
+                'Units','normalized', 'Position', app.rowPosition(10,nRows,1,2));
             app.EmbedOrderEditField = uicontrol(app.PreprocessPanel, 'Style','edit', ...
-                'String','1', 'Units','normalized', 'Position', app.rowPosition(7,nRows,2,2));
+                'String','1', 'Units','normalized', 'Position', app.rowPosition(10,nRows,2,2));
 
             % ================= panel 3: network parameters =================
             nRows = 6;
