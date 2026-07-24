@@ -75,6 +75,7 @@ classdef TemporalMapperApp < handle
         LabelMethodLabel        matlab.ui.control.UIControl
         LabelMethodDropDown     matlab.ui.control.UIControl
         ShowRecurrenceCheckBox  matlab.ui.control.UIControl
+        ShowNodeBorderCheckBox  matlab.ui.control.UIControl
         BuildButton             matlab.ui.control.UIControl
         CopyCodeButton          matlab.ui.control.UIControl
         StatusLabel             matlab.ui.control.UIControl
@@ -280,7 +281,8 @@ classdef TemporalMapperApp < handle
             plottmgraph(g_simp, colorvar, members, 'ax', app.NetworkAxes, ...
                 'nodesizemode', nodeSizeMode, ...
                 'labelmethod', labelMethod, ...
-                'colorlabel', colorlabel);
+                'colorlabel', colorlabel, ...
+                'nodescatter', app.ShowNodeBorderCheckBox.Value);
             % axis('equal') alone lets MATLAB stretch the axis LIMITS
             % (not just the rendered box) to match the axes' own w:h
             % ratio when it isn't perfectly square, leaving wide blank
@@ -423,19 +425,35 @@ classdef TemporalMapperApp < handle
             end
             L{end+1} = '';
 
+            nodescatter = app.ShowNodeBorderCheckBox.Value;
             if app.ShowRecurrenceCheckBox.Value
                 % plotgraphtcm opens its own figure internally (network
                 % + recurrence plot side by side), so no explicit
                 % figure() call here.
-                L{end+1} = sprintf(['plotgraphtcm(g_simp, colorvar, t, members, ''nodesizemode'', ''%s'', ' ...
-                    '''labelmethod'', ''%s'', ''colorlabel'', %s);'], nodeSizeMode, labelMethod, colorlabelExpr);
+                L{end+1} = sprintf(['[h1,~,~,~,~,~] = plotgraphtcm(g_simp, colorvar, t, members, ' ...
+                    '''nodesizemode'', ''%s'', ''labelmethod'', ''%s'', ''colorlabel'', %s, ' ...
+                    '''nodescatter'', %d);'], nodeSizeMode, labelMethod, colorlabelExpr, nodescatter);
             else
                 % plottmgraph plots into gca by default, reusing an
                 % existing figure if one is open -- open a new one first
                 % so this doesn't overwrite whatever's already on screen.
                 L{end+1} = 'figure;';
-                L{end+1} = sprintf(['plottmgraph(g_simp, colorvar, members, ''nodesizemode'', ''%s'', ' ...
-                    '''labelmethod'', ''%s'', ''colorlabel'', %s);'], nodeSizeMode, labelMethod, colorlabelExpr);
+                L{end+1} = sprintf(['[h1,~,~,~] = plottmgraph(g_simp, colorvar, members, ' ...
+                    '''nodesizemode'', ''%s'', ''labelmethod'', ''%s'', ''colorlabel'', %s, ' ...
+                    '''nodescatter'', %d);'], nodeSizeMode, labelMethod, colorlabelExpr, nodescatter);
+            end
+            % axis('equal') alone (set inside plottmgraph) can leave wide
+            % blank margins when the axes box isn't perfectly square;
+            % 'tight' re-hugs the limits to the actual plotted data,
+            % giving the network more of the figure to fill -- same fix
+            % applied to the app's own NetworkAxes.
+            L{end+1} = 'axis(h1,''tight'')';
+            if order > 1
+                L{end+1} = sprintf(['title(h1, sprintf(''k=%%g, d=%%g, texclude=%%g, maxdist=%%.4g, ' ...
+                    'lag=%%g, order=%%g'', %g, %g, %g, par.maxNeighborDist, %g, %g));'], k, d, texclude, lag, order);
+            else
+                L{end+1} = sprintf(['title(h1, sprintf(''k=%%g, d=%%g, texclude=%%g, maxdist=%%.4g'', ' ...
+                    '%g, %g, %g, par.maxNeighborDist));'], k, d, texclude);
             end
 
             code = strjoin(L, newline);
@@ -742,7 +760,7 @@ classdef TemporalMapperApp < handle
                 'Units','normalized', 'Position', app.rowPosition(6,nRows,1,1));
 
             % ================= panel 4: plot options =================
-            nRows = 6;
+            nRows = 7;
             app.ColorVarLabel = uicontrol(app.PlotOptionsPanel, 'Style','text', ...
                 'String','Color by:', 'HorizontalAlignment','left', ...
                 'Units','normalized', 'Position', app.rowPosition(1,nRows,1,2));
@@ -780,6 +798,11 @@ classdef TemporalMapperApp < handle
                 'String','Show recurrence plot', 'Value',1, ...
                 'TooltipString','Uncheck to show only the network plot, widened to fill the panel.', ...
                 'Units','normalized', 'Position', app.rowPosition(6,nRows,1,2));
+
+            app.ShowNodeBorderCheckBox = uicontrol(app.PlotOptionsPanel, 'Style','checkbox', ...
+                'String','Show node border', 'Value',0, ...
+                'TooltipString','Overlay a black-outlined scatter marker on each node (plottmgraph''s "nodescatter" option) -- can look cleaner for dense graphs.', ...
+                'Units','normalized', 'Position', app.rowPosition(7,nRows,1,2));
 
             % ================= bottom: plot panel =================
             app.NetworkAxes = axes('Parent', app.PlotPanel, 'Units','normalized', ...
