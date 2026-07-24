@@ -356,7 +356,13 @@ classdef TemporalMapperApp < handle
 
             showRecurrence = app.ShowRecurrenceCheckBox.Value;
             if showRecurrence
-                app.NetworkAxes.Position = [0.06 0.12 0.40 0.78];
+                % leave enough of a gap between the two axes for the
+                % network's colorbar + its (possibly long, e.g. a
+                % workspace variable name) rotated label to clear the
+                % recurrence plot's own y-axis label -- a narrower gap
+                % let them visually collide.
+                app.NetworkAxes.Position = [0.05 0.12 0.38 0.78];
+                app.RecurrenceAxes.Position = [0.58 0.12 0.38 0.78];
                 app.RecurrenceAxes.Visible = 'on';
             else
                 % network plot alone gets the full plot panel width
@@ -977,11 +983,11 @@ classdef TemporalMapperApp < handle
 
             % ================= bottom: plot panel =================
             app.NetworkAxes = axes('Parent', app.PlotPanel, 'Units','normalized', ...
-                'Position',[0.06 0.12 0.40 0.78]);
+                'Position',[0.05 0.12 0.38 0.78]);
             title(app.NetworkAxes,'attractor transition network')
 
             app.RecurrenceAxes = axes('Parent', app.PlotPanel, 'Units','normalized', ...
-                'Position',[0.56 0.12 0.40 0.78]);
+                'Position',[0.58 0.12 0.38 0.78]);
             title(app.RecurrenceAxes,'geodesic recurrence plot')
         end
     end
