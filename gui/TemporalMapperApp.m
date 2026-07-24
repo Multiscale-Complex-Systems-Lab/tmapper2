@@ -429,16 +429,24 @@ classdef TemporalMapperApp < handle
             if app.ShowRecurrenceCheckBox.Value
                 % plotgraphtcm opens its own figure internally (network
                 % + recurrence plot side by side), so no explicit
-                % figure() call here.
-                L{end+1} = sprintf(['[h1,~,~,~,~,~] = plotgraphtcm(g_simp, colorvar, t, members, ' ...
+                % figure() call here. All outputs are named (rather than
+                % suppressed with ~) so they're available for downstream
+                % custom analysis: h1/h2 are the network/recurrence axes,
+                % cb/cb_ their colorbars, hg the graph plot handle,
+                % D_geo the recurrence/TCM distance matrix, hs the node
+                % scatter overlay handle (empty unless nodescatter=1).
+                L{end+1} = sprintf(['[h1, h2, cb, cb_, hg, D_geo, hs] = plotgraphtcm(g_simp, colorvar, t, members, ' ...
                     '''nodesizemode'', ''%s'', ''labelmethod'', ''%s'', ''colorlabel'', %s, ' ...
                     '''nodescatter'', %d);'], nodeSizeMode, labelMethod, colorlabelExpr, nodescatter);
             else
                 % plottmgraph plots into gca by default, reusing an
                 % existing figure if one is open -- open a new one first
                 % so this doesn't overwrite whatever's already on screen.
+                % Outputs named for the same reason as above: h1 the
+                % network axes, cb its colorbar, hg the graph plot
+                % handle, hs the node scatter overlay handle.
                 L{end+1} = 'figure;';
-                L{end+1} = sprintf(['[h1,~,~,~] = plottmgraph(g_simp, colorvar, members, ' ...
+                L{end+1} = sprintf(['[h1, cb, hg, hs] = plottmgraph(g_simp, colorvar, members, ' ...
                     '''nodesizemode'', ''%s'', ''labelmethod'', ''%s'', ''colorlabel'', %s, ' ...
                     '''nodescatter'', %d);'], nodeSizeMode, labelMethod, colorlabelExpr, nodescatter);
             end
