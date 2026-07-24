@@ -353,6 +353,10 @@ classdef TemporalMapperApp < handle
             cla(app.NetworkAxes)
             cla(app.RecurrenceAxes)
             colorbar(app.RecurrenceAxes,'off') % remove any colorbar from a previous render
+            % cla() doesn't reset axes Color, but re-assert white here anyway
+            % in case a theme change restyled it since createComponents.
+            app.NetworkAxes.Color = [1 1 1];
+            app.RecurrenceAxes.Color = [1 1 1];
 
             showRecurrence = app.ShowRecurrenceCheckBox.Value;
             if showRecurrence
@@ -814,7 +818,13 @@ classdef TemporalMapperApp < handle
                 'Units','normalized', 'Position',[2*panelW 1-setupH panelW setupH]);
             app.PlotOptionsPanel = uipanel(app.UIFigure, 'Title','Plot Options', ...
                 'Units','normalized', 'Position',[3*panelW 1-setupH panelW setupH]);
+            % BackgroundColor forced to white (not left to inherit from
+            % the figure/theme) so the plotting region doesn't turn dark
+            % under MATLAB dark mode -- plottmgraph draws graph edges in
+            % black, which would become invisible against a dark
+            % background otherwise.
             app.PlotPanel = uipanel(app.UIFigure, 'Title','Network', ...
+                'BackgroundColor',[1 1 1], ...
                 'Units','normalized', 'Position',[0 0 1 1-setupH]);
 
             % ================= panel 1: data, build & status =================
@@ -990,12 +1000,16 @@ classdef TemporalMapperApp < handle
                 'Callback', @(src,evt) app.PlotOptionChanged(src,evt));
 
             % ================= bottom: plot panel =================
+            % Color forced to white for the same dark-mode reason as
+            % PlotPanel's BackgroundColor above; re-asserted in
+            % renderPlot() too since cla() doesn't reset it, but a
+            % theme change could still restyle it between builds.
             app.NetworkAxes = axes('Parent', app.PlotPanel, 'Units','normalized', ...
-                'Position',[0.05 0.12 0.38 0.78]);
+                'Color',[1 1 1], 'Position',[0.05 0.12 0.38 0.78]);
             title(app.NetworkAxes,'attractor transition network')
 
             app.RecurrenceAxes = axes('Parent', app.PlotPanel, 'Units','normalized', ...
-                'Position',[0.58 0.12 0.38 0.78]);
+                'Color',[1 1 1], 'Position',[0.58 0.12 0.38 0.78]);
             title(app.RecurrenceAxes,'geodesic recurrence plot')
         end
     end
