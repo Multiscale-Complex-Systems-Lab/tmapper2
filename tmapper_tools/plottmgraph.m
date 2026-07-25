@@ -45,6 +45,9 @@ modifications:
 (7-23-2026) add 'ax' parameter so this can render into a caller-supplied
 target axes (e.g. a uiaxes inside an App Designer app) instead of
 always creating/using a new figure via gca.
+(7-25-2026) error on NaN in x_label instead of silently propagating it
+into an incomplete/misleading plot -- callers must remove or impute
+missing data themselves (e.g. via rmmissing).
 
 %}
 
@@ -70,6 +73,15 @@ end
 % -- check labels for members
 if ~exist("x_label","var") || isempty(x_label)
     x_label = ones(length(unique(cell2mat(nodemembers(:)))),1);
+end
+
+% -- reject missing data outright rather than silently degrading: mean/
+% median (used by findnodelabel's aggregation) propagate NaN, so any
+% node with even one NaN member would render with no real color and no
+% indication why.
+if any(isnan(x_label))
+    error('plottmgraph:missingData', ...
+        'x_label contains NaN values. Remove or impute missing data before calling plottmgraph, e.g. via rmmissing.');
 end
 
 % -- check other parameters

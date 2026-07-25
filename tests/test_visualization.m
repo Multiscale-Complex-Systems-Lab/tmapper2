@@ -186,4 +186,23 @@ assert(isgraphics(h1_const,'axes') && isgraphics(cb_const,'colorbar'), ...
     'plottmgraph should run without error when x_label has no variation (clim edge case).');
 close all
 
+% -- input validation: plottmgraph should reject NaN in x_label rather
+% than silently rendering an incomplete/misleading plot.
+colorvar_nan = colorvar;
+colorvar_nan(3) = NaN;
+assertThrows(@() plottmgraph(g_simp,colorvar_nan,members), 'plottmgraph:missingData', ...
+    'plottmgraph should reject x_label containing NaN.');
+close all
+
 disp('All tests passed.');
+
+function assertThrows(fcn, expectedID, msg)
+    try
+        fcn();
+    catch err
+        assert(strcmp(err.identifier, expectedID), ...
+            '%s (expected error id "%s", got "%s")', msg, expectedID, err.identifier);
+        return
+    end
+    error('%s (expected an error but none was thrown)', msg);
+end

@@ -296,6 +296,18 @@ assertThrows(@() tknndigraph(D,N,tidx), 'tknndigraph:invalidInput', ...
 assertThrows(@() tknndigraph(D,1.5,tidx), 'tknndigraph:invalidInput', ...
     'tknndigraph should reject non-integer k.');
 
+% -- tknndigraph should reject NaN in a precomputed distance matrix, and
+% equally reject it when raw coordinates containing NaN are given
+% instead (pdist2 propagates the NaN into D internally either way).
+D_nan = D;
+D_nan(2,3) = NaN;
+assertThrows(@() tknndigraph(D_nan,k,tidx), 'tknndigraph:missingData', ...
+    'tknndigraph should reject a distance matrix containing NaN.');
+X_nan = X;
+X_nan(2,1) = NaN;
+assertThrows(@() tknndigraph(X_nan,k,tidx), 'tknndigraph:missingData', ...
+    'tknndigraph should reject raw coordinates containing NaN.');
+
 % -- input validation: filtergraph
 assertThrows(@() filtergraph(D,1), 'filtergraph:invalidInput', ...
     'filtergraph should reject a non-graph/digraph first argument.');
