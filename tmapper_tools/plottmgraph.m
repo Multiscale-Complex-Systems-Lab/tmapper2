@@ -25,6 +25,9 @@ function [h1, cb, hg, hs] = plottmgraph(g,x_label,nodemembers, varargin)
 %   [], which uses [min(x_label) max(x_label)].
 %   nodescatter: whether to overlay a scatter plot on top of the graph
 %   nodes (can look cleaner for dense graphs). Default false.
+%   ax: target axes to plot into (e.g. a uiaxes inside an App Designer
+%   app). Default [], which uses gca (creating a new figure if none
+%   exists), matching prior behavior.
 % output:
 %   h1: axis handle of the plot.
 %   cb: handle of the colorbar of graph
@@ -39,6 +42,12 @@ modifications:
 (7-19-2026) fix header: nodesizemode's actual default is 'log', not
 'rank' as previously documented; also document 'nodeclim' and
 'nodescatter', which existed but were missing from the parameter list.
+(7-23-2026) add 'ax' parameter so this can render into a caller-supplied
+target axes (e.g. a uiaxes inside an App Designer app) instead of
+always creating/using a new figure via gca.
+(7-25-2026) error on NaN in x_label instead of silently propagating it
+into an incomplete/misleading plot -- callers must remove or impute
+missing data themselves (e.g. via rmmissing).
 
 %}
 
@@ -47,10 +56,11 @@ p.addParameter('nodesizerange',[1 10]);
 p.addParameter('nodesizemode','log')% whether of not use ranked node size
 p.addParameter('colorlabel',"x\_label")% what variable does x_label reflect
 p.addParameter('cmap','jet') % colormap
-% p.addParameter('normalize',false) % whether or not 
+% p.addParameter('normalize',false) % whether or not
 p.addParameter('labelmethod','mode')% methods for labeling nodes
 p.addParameter('nodeclim',[])% [min max] of the color axis for the node colors
 p.addParameter('nodescatter',false)% plot scatterplot overlay of nodes (to look better)
+p.addParameter('ax',[])% target axes; default [] uses gca
 p.parse(varargin{:});
 
 par = p.Results;
@@ -63,6 +73,15 @@ end
 % -- check labels for members
 if ~exist("x_label","var") || isempty(x_label)
     x_label = ones(length(unique(cell2mat(nodemembers(:)))),1);
+end
+
+% -- reject missing data outright rather than silently degrading: mean/
+% median (used by findnodelabel's aggregation) propagate NaN, so any
+% node with even one NaN member would render with no real color and no
+% indication why.
+if any(isnan(x_label))
+    error('plottmgraph:missingData', ...
+        'x_label contains NaN values. Remove or impute missing data before calling plottmgraph, e.g. via rmmissing.');
 end
 
 % -- check other parameters
@@ -89,28 +108,34 @@ end
 nodelabel = findnodelabel(nodemembers,x_label,'labelmethod',par.labelmethod);
 
 % -- plotting
+if isempty(par.ax)
+    ax = gca; % preserves prior behavior: current axes, or a new figure if none exists
+else
+    ax = par.ax;
+end
+
 % plot graph
-hg=plot(g,'EdgeAlpha',0.3,'EdgeColor','k','NodeCData',nodelabel,'NodeLabel','',...
-    'Layout','force','UseGravity',true,'ArrowSize',5,'MarkerSize',nodesize); 
-axis equal
-axis off
-cb=colorbar;
+hg=plot(ax,g,'EdgeAlpha',0.3,'EdgeColor','k','NodeCData',nodelabel,'NodeLabel','',...
+    'Layout','force','UseGravity',true,'ArrowSize',5,'MarkerSize',nodesize);
+axis(ax,'equal')
+axis(ax,'off')
+cb=colorbar(ax);
 cb.Label.String = par.colorlabel;
 if diff(par.nodeclim)~=0% if there is a range of values
-    caxis(par.nodeclim)
+    caxis(ax,par.nodeclim)
 end
-colormap(gca, par.cmap)
-h1 = gca;
+colormap(ax, par.cmap)
+h1 = ax;
 % -- overlay with scatter plot for better visualization
 if par.nodescatter
-    hold on
+    hold(ax,'on')
     [~,idx] = sort(hg.MarkerSize,'ascend'); % --- determine scatter order
     % reshape to a column: scatter() ambiguously treats an exactly-3-
     % element ROW color vector as a single RGB triplet rather than
     % per-point color data, which breaks (errors on redraw) for
     % exactly-3-node graphs whenever the values fall outside [0,1]. A
     % column vector is never misinterpreted this way.
-    hs=scatter(hg.XData(idx),hg.YData(idx),hg.MarkerSize(idx).^2,reshape(hg.NodeCData(idx),[],1),...
+    hs=scatter(ax,hg.XData(idx),hg.YData(idx),hg.MarkerSize(idx).^2,reshape(hg.NodeCData(idx),[],1),...
         'filled','MarkerEdgeColor','k','LineWidth',0.2);
 else
     hs = [];

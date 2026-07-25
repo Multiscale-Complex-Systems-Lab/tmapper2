@@ -41,6 +41,9 @@ link. parameter: timeExcludeSpace
 calculation. enforced spatial knn to not include temporal neighbors. Reduce
 k by 1 relative to previous versions will yield same result.
 (6-29-2025) handle edge case of duplicate points. add max distances.
+(7-25-2026) error on NaN in the (computed) distance matrix instead of
+silently propagating it into a degenerate graph -- callers must remove
+or impute missing data themselves (e.g. via rmmissing).
 
 %}
 
@@ -73,6 +76,17 @@ if nr~=nc || any(any(XorD~=XorD'))
 else
     D = XorD;
 end
+
+% -- reject missing data outright rather than silently degrading: NaN
+% propagates through pdist2/zscore-style computations (a NaN coordinate
+% poisons every distance touching it), which would otherwise produce a
+% network with no real spatial edges without any indication why.
+if any(isnan(D(:)))
+    error('tknndigraph:missingData', ...
+        ['XorD contains NaN values (or produces them once converted to a distance matrix). ' ...
+        'Remove or impute missing data before calling tknndigraph, e.g. via rmmissing.']);
+end
+
 Nn = length(D); % number of nodes
 
 if k >= Nn
