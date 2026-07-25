@@ -371,6 +371,46 @@ close(newFigsR)
 
 delete(appRange);
 
+% -- missing data guard: rows with NaN in the selected variables should
+% be dropped automatically (with a warning), not silently corrupt the
+% whole build via zscore's NaN-propagation-across-an-entire-column
+% behavior (confirmed separately: zscore([1;2;NaN]) is all-NaN).
+appMissing = TemporalMapperApp;
+TMissing = Trange; % reuse the 200-row x/y/z synthetic table
+TMissing.x(37) = NaN;
+appMissing.loadData(TMissing);
+assert(isequal(appMissing.VariableListBox.String(:), {'x';'y';'z'}), ...
+    'loadData should succeed and expose all numeric variables even when they contain NaN values.');
+appMissing.VariableListBox.Value = 1:3;
+appMissing.KEditField.String = '3';
+appMissing.DEditField.String = '2';
+appMissing.TExcludeEditField.String = '5';
+appMissing.RangeStartEditField.String = '1';
+appMissing.RangeEndEditField.String = 'Inf';
+appMissing.DownsampleEditField.String = '1';
+appMissing.buildNetwork(); % should NOT throw despite the NaN
+assert(contains(appMissing.StatusTextArea.String{1}, 'Built network:'), ...
+    'buildNetwork should still succeed (by dropping the missing row) rather than erroring.');
+assert(numel(appMissing.StatusTextArea.String) >= 3 && ...
+    contains(appMissing.StatusTextArea.String{3}, 'Dropped 1 of 200 row(s)'), ...
+    'buildNetwork should warn about the exact number of rows dropped for missing data.');
+
+% -- cross-check via generateCode that the dropped row is really excluded
+codeMissing = appMissing.generateCode();
+runnableMissing = strrep(codeMissing, placeholder, 'dat = TMissing;');
+runnableMissing = strrep(runnableMissing, 'addpath("tmapper_tools/")', '');
+figsBeforeM = findobj('Type','figure');
+eval(runnableMissing);
+newFigsM = setdiff(findobj('Type','figure'), figsBeforeM);
+assert(nDropped == 1, 'generated code should also detect exactly 1 dropped row.');
+assert(~ismember(37, baseRows), 'the row with the injected NaN should be excluded from baseRows.');
+close(newFigsM)
+delete(appMissing);
+
+% -- a normal (clean) build should NOT emit a "Dropped" warning line
+assert(~any(contains(app.StatusTextArea.String, 'Dropped')), ...
+    'a build with no missing data should not emit a dropped-rows warning.');
+
 delete(app);
 close all
 

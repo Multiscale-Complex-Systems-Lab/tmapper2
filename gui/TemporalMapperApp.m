@@ -221,10 +221,25 @@ classdef TemporalMapperApp < handle
                 error('TemporalMapperApp:invalidRange', 'End row must be greater than or equal to start row.');
             end
             downsample = app.parseNumericField(app.DownsampleEditField, 'downsample factor', 1, Inf, true, false);
-            baseRows = startRow:downsample:endRow;
+
+            % -- drop rows with missing (NaN) values in the selected
+            % variables BEFORE lowpass filtering/downsampling: movmean
+            % (like zscore) propagates NaN across its averaging window, so
+            % leaving gaps in place would poison their neighbors too. This
+            % automates tmapper_demo.m's convention of rmmissing-ing the
+            % table up front, rather than assuming the user already did it
+            % -- a network built from unremoved NaNs degenerates silently
+            % (zscore/pdist2 both propagate NaN across an entire column/
+            % matrix), so dropping is not optional here.
+            windowRows = (startRow:endRow)';
+            missingMask = any(isnan(app.DataTable{windowRows,selectedVars}), 2);
+            cleanRows = windowRows(~missingMask);
+            nDropped = numel(windowRows) - numel(cleanRows);
+
+            baseRows = cleanRows(1:downsample:end);
             if numel(baseRows) < 2
                 error('TemporalMapperApp:invalidRange', ...
-                    'Row range/downsampling leaves only %d row(s) -- need at least 2.', numel(baseRows));
+                    'Row range/downsampling/missing-data removal leaves only %d row(s) -- need at least 2.', numel(baseRows));
             end
 
             % -- anti-aliasing lowpass filter before downsampling: a plain
@@ -234,7 +249,7 @@ classdef TemporalMapperApp < handle
             % first (movmean -- built into base MATLAB, no toolbox needed)
             % attenuates that content before it gets aliased. No-op when
             % downsample==1 (nothing to alias).
-            windowVals = app.DataTable{startRow:endRow,selectedVars};
+            windowVals = app.DataTable{cleanRows,selectedVars};
             if downsample > 1
                 smoothVals = movmean(windowVals, downsample, 1);
                 filteredVals = smoothVals(1:downsample:end,:);
@@ -344,10 +359,15 @@ classdef TemporalMapperApp < handle
                     'network plot %.2f, total %.2f.'], ...
                     tDistances, tKnn, tSimplify, tPlotNetwork, tTotal);
             end
-            app.StatusTextArea.String = { ...
+            statusLines = { ...
                 sprintf('Built network: %d nodes, %d edges. Resolved max distance = %.4g.', ...
                     numnodes(g_simp), numedges(g_simp), par.maxNeighborDist), ...
                 timingLine};
+            if nDropped > 0
+                statusLines{end+1} = sprintf(['Dropped %d of %d row(s) in the selected range due to ' ...
+                    'missing values in the selected variables.'], nDropped, numel(windowRows));
+            end
+            app.StatusTextArea.String = statusLines;
         end
 
         function [tPlotNetwork, tPlotRecurrence, showRecurrence] = renderPlot(app)
@@ -509,13 +529,25 @@ classdef TemporalMapperApp < handle
             L{end+1} = app.DataSourceCode;
             L{end+1} = '';
             L{end+1} = sprintf('selectedVars = {%s};', varListStr);
-            L{end+1} = sprintf('baseRows = %g:%g:%g; %% start row : downsample factor : end row', ...
-                startRow, downsample, endRow);
+            L{end+1} = sprintf('startRow = %g; endRow = %g; downsample = %g;', startRow, endRow, downsample);
+            L{end+1} = '%% drop rows with missing (NaN) values in the selected variables before';
+            L{end+1} = '%% lowpass filtering/downsampling -- movmean (like zscore) propagates NaN';
+            L{end+1} = '%% across its averaging window, so leaving gaps in place would poison';
+            L{end+1} = '%% their neighbors too.';
+            L{end+1} = 'windowRows = startRow:endRow;';
+            L{end+1} = 'missingMask = any(isnan(dat{windowRows,selectedVars}), 2);';
+            L{end+1} = 'cleanRows = windowRows(missingMask == 0);';
+            L{end+1} = 'nDropped = numel(windowRows) - numel(cleanRows);';
+            L{end+1} = 'if nDropped > 0';
+            L{end+1} = ['    warning(''TemporalMapper:missingData'', ''Dropped %d of %d row(s) due ' ...
+                'to missing values in the selected variables.'', nDropped, numel(windowRows));'];
+            L{end+1} = 'end';
+            L{end+1} = 'baseRows = cleanRows(1:downsample:end);';
             if downsample > 1
                 L{end+1} = '%% anti-aliasing lowpass filter before downsampling (moving average';
                 L{end+1} = '%% over the downsample window, so striding below doesn''t alias';
                 L{end+1} = '%% high-frequency content into spurious low-frequency structure)';
-                L{end+1} = sprintf('windowVals = dat{%g:%g,selectedVars};', startRow, endRow);
+                L{end+1} = 'windowVals = dat{cleanRows,selectedVars};';
                 L{end+1} = sprintf('smoothVals = movmean(windowVals, %g, 1);', downsample);
                 L{end+1} = sprintf('filteredVals = smoothVals(1:%g:end,:);', downsample);
             else
