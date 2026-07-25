@@ -92,5 +92,6 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Quickstart: quickstart.md
+  - Interactive App: gui-app.md
   - Concepts: concepts.md
   - Applications: applications.md

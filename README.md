@@ -12,6 +12,14 @@ Add the toolbox functions to your MATLAB path:
 addpath("tmapper_tools/")
 ```
 
+Prefer a point-and-click interface? `gui/TemporalMapperApp.m` runs the same
+pipeline without writing code:
+```Matlab
+addpath("gui/")
+app = TemporalMapperApp;
+```
+See the [Interactive App](https://multiscale-complex-systems-lab.github.io/tmapper2/gui-app/) page for a full walkthrough.
+
 ### Step 1: construct spatiotemporal neighborhood graph
 You will first need a distance matrix `D` which gives the pairwise distance between every two time points. `k` is the maximal number of spatial neighbors each time point will have. `tidx` is integer indices of each time point. By calling the function below, you will get a directed graph `g`, where each node is a time point. This is the spatiotemporal neighborhood graph. 
 

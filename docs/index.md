@@ -58,6 +58,7 @@ of freely interacting animals. See [Applications](applications.md) for details a
 
 - **[Installation](installation.md)** — add the toolbox to your MATLAB path and check dependencies.
 - **[Quickstart](quickstart.md)** — build your first transition network end to end, reproducing the figure above.
+- **[Interactive App](gui-app.md)** — the same pipeline, point-and-click, no code required.
 - **[Concepts](concepts.md)** — what the nodes, edges, and loops mean, and why the two-step construction works.
 - **[Applications](applications.md)** — published examples in brain and social dynamics.
 
