@@ -517,6 +517,63 @@ assert(all(diff(tidx(:)) == 1), ...
 close(newFigsD)
 delete(appDec);
 
+% -- datetime columns. readtable turns a date column into datetime, which
+% is NOT isnumeric -- so a numeric-only filter hides it from the Color
+% by/Time axis dropdowns entirely, and the GUI can't even reproduce
+% tmapper_demo.m's own "t = dat.Date" time axis. Datetime is offered for
+% colouring and the time axis, but still barred from the build variables
+% (distances need real numbers).
+rng(5);
+Ndt = 150;
+TDate = table();
+TDate.Date = (datetime(2020,1,1) + days(0:Ndt-1))';
+TDate.x = sin((1:Ndt)'/10);
+TDate.y = cos((1:Ndt)'/10);
+
+appDate = TemporalMapperApp;
+appDate.loadData(TDate);
+assert(isequal(appDate.VariableListBox.String(:), {'x';'y'}), ...
+    'a datetime column must not be offered as a build variable.');
+assert(any(strcmp(appDate.TimeVarDropDown.String, 'Date')), ...
+    'a datetime column should be selectable as the Time axis.');
+assert(any(strcmp(appDate.ColorVarDropDown.String, 'Date')), ...
+    'a datetime column should be selectable as the Color by variable.');
+
+appDate.VariableListBox.Value = 1:2;
+appDate.KEditField.String = '3';
+appDate.DEditField.String = '2';
+appDate.TExcludeEditField.String = '5';
+
+% datetime as the time axis: imagesc takes datetime natively, so this
+% should render the recurrence plot against real dates
+appDate.TimeVarDropDown.Value = find(strcmp(appDate.TimeVarDropDown.String, 'Date'));
+appDate.buildNetwork();
+assert(contains(appDate.StatusTextArea.String{1}, 'Built network:'), ...
+    'building with a datetime time axis should succeed.');
+assert(isa(appDate.RecurrenceAxes.XAxis, 'matlab.graphics.axis.decorator.DatetimeRuler'), ...
+    'the recurrence plot should use a real datetime axis, not raw numbers.');
+
+% datetime as the colour variable: plottmgraph calls isnan on colorvar,
+% which errors on datetime, so the app must convert it to numeric
+appDate.ColorVarDropDown.Value = find(strcmp(appDate.ColorVarDropDown.String, 'Date'));
+appDate.ColorVarDropDown.Callback(appDate.ColorVarDropDown, []);
+assert(contains(appDate.StatusTextArea.String{1}, 'Re-rendered plot'), ...
+    'colouring by a datetime column should re-render without erroring.');
+
+% and the generated script must run with both set to the datetime column
+codeDate = appDate.generateCode();
+runnableDate = strrep(codeDate, placeholder, 'dat = TDate;');
+runnableDate = strrep(runnableDate, 'addpath("tmapper_tools/")', '');
+figsBeforeDt = findobj('Type','figure');
+eval(runnableDate);
+newFigsDt = setdiff(findobj('Type','figure'), figsBeforeDt);
+assert(isnumeric(colorvar), ...
+    'generated code should convert a datetime colour variable to numeric.');
+assert(isdatetime(t), ...
+    'generated code should keep a datetime time axis as datetime.');
+close(newFigsDt)
+delete(appDate);
+
 delete(app);
 close all
 

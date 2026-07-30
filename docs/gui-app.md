@@ -60,6 +60,18 @@ the recurrence plot / a node-border scatter overlay. Changing any of these
 **re-renders the existing network instead of rebuilding it** — cheap, and
 safe to click through freely once a build has completed.
 
+!!! note "Date columns"
+    `readtable` turns a date column into `datetime` automatically, and those
+    columns are offered for **Color by** and **Time axis** — so the GUI can
+    reproduce `tmapper_demo.m`'s own `t = dat.Date` axis, with the recurrence
+    plot labelled in real dates rather than row numbers.
+
+    They stay out of **Variables**, though: distances need real numbers. For
+    colouring, a date is converted with `datenum` (a colormap needs numbers,
+    and `plottmgraph` calls `isnan` on the colour variable, which errors on
+    `datetime`); the time axis keeps the `datetime` as-is, since `imagesc`
+    takes it natively.
+
 ## Missing data and downsampling
 
 Two things the scripted pipeline leaves to you are handled automatically here:

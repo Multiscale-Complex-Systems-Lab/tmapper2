@@ -96,6 +96,7 @@ classdef TemporalMapperApp < handle
     properties (Access = private)
         DataTable = table()   % the loaded data
         NumericVarNames = {}  % candidate columns (numeric only)
+        DatetimeVarNames = {} % datetime columns: colour/time axis only, never build variables
         ExtraColorVarNames = {}  % display names of workspace-sourced color vectors
         ExtraColorVarValues = {} % their values, parallel to ExtraColorVarNames
         DataSourceCode = '% dat = <load your data here as a table, e.g. dat = readtable(''your_file.csv'');>' % how "dat" was obtained, for generateCode
@@ -132,9 +133,17 @@ classdef TemporalMapperApp < handle
                 error('TemporalMapperApp:noNumericVars', ...
                     'That data has no numeric columns to build a network from.');
             end
+            % -- datetime columns are usable for colouring and as the time
+            % axis, but NOT as build variables: distances need real
+            % numbers. readtable produces these automatically from a date
+            % column, so filtering the dropdowns by isnumeric alone would
+            % hide the very column tmapper_demo.m uses as its time axis.
+            isdt = varfun(@isdatetime, T, 'OutputFormat','uniform');
+            dateNames = T.Properties.VariableNames(isdt);
 
             app.DataTable = T;
             app.NumericVarNames = varNames;
+            app.DatetimeVarNames = dateNames;
             % any workspace-sourced color vectors were aligned to the
             % previous data's row count, so they no longer apply
             app.ExtraColorVarNames = {};
@@ -146,9 +155,9 @@ classdef TemporalMapperApp < handle
             app.LastTidx = [];
             app.VariableListBox.String = varNames;
             app.VariableListBox.Value = 1:numel(varNames); % select all by default
-            app.ColorVarDropDown.String = [{'(row index)'}, varNames];
+            app.ColorVarDropDown.String = [{'(row index)'}, varNames, dateNames];
             app.ColorVarDropDown.Value = 1;
-            app.TimeVarDropDown.String = [{'(row index)'}, varNames];
+            app.TimeVarDropDown.String = [{'(row index)'}, varNames, dateNames];
             app.TimeVarDropDown.Value = 1;
             app.FileLabel.String = sprintf('Loaded: %d rows, %d numeric vars', height(T), numel(varNames));
             app.StatusTextArea.String = {sprintf('Loaded data: %d rows, %d numeric variables.', height(T), numel(varNames))};
@@ -180,7 +189,7 @@ classdef TemporalMapperApp < handle
                 app.ExtraColorVarNames{end+1} = displayName;
                 app.ExtraColorVarValues{end+1} = v;
             end
-            app.ColorVarDropDown.String = [{'(row index)'}, app.NumericVarNames, app.ExtraColorVarNames];
+            app.ColorVarDropDown.String = [{'(row index)'}, app.NumericVarNames, app.DatetimeVarNames, app.ExtraColorVarNames];
             app.ColorVarDropDown.Value = numel(app.ColorVarDropDown.String); % select the one just added
         end
 
@@ -411,6 +420,12 @@ classdef TemporalMapperApp < handle
             elseif ismember(selectedColor, app.NumericVarNames)
                 colorvar = app.DataTable.(selectedColor)(rows);
                 colorlabel = selectedColor;
+            elseif ismember(selectedColor, app.DatetimeVarNames)
+                % plottmgraph calls isnan on colorvar, which errors on
+                % datetime, and a colormap needs numbers regardless --
+                % datenum keeps the ordering and spacing intact.
+                colorvar = datenum(app.DataTable.(selectedColor)(rows)); %#ok<DATNM>
+                colorlabel = selectedColor;
             else
                 extraIdx = strcmp(app.ExtraColorVarNames, selectedColor);
                 fullvec = app.ExtraColorVarValues{extraIdx};
@@ -612,6 +627,13 @@ classdef TemporalMapperApp < handle
                 colorlabelExpr = '''row index''';
             elseif ismember(selectedColor, app.NumericVarNames)
                 L{end+1} = sprintf('colorvar = dat.%s(rows);', selectedColor);
+                colorlabelExpr = ['''' selectedColor ''''];
+            elseif ismember(selectedColor, app.DatetimeVarNames)
+                L{end+1} = '%% plottmgraph calls isnan on colorvar, which errors on datetime, and';
+                L{end+1} = '%% a colormap needs numbers regardless -- datenum keeps the ordering';
+                L{end+1} = '%% and spacing intact. (The time axis below stays datetime: imagesc';
+                L{end+1} = '%% takes it natively and labels the axis with real dates.)';
+                L{end+1} = sprintf('colorvar = datenum(dat.%s(rows));', selectedColor);
                 colorlabelExpr = ['''' selectedColor ''''];
             else
                 L{end+1} = sprintf(['%% "%s" was a workspace variable added via the "Color by Workspace ' ...
