@@ -64,18 +64,37 @@ safe to click through freely once a build has completed.
 
 Two things the scripted pipeline leaves to you are handled automatically here:
 
-!!! note "Missing data is dropped, not ignored"
-    Rows with a missing value in any selected variable are dropped
-    automatically before building (the status area reports exactly how many),
-    rather than being silently passed through the pipeline — an unremoved
-    `NaN` here would poison the entire distance matrix without any visible
-    error. Calling `tknndigraph`/`plottmgraph` directly on unclean data
-    still raises an error, per the usual `rmmissing`-first convention.
+!!! note "Missing data is handled, not ignored"
+    A missing value in any selected variable is never passed through to the
+    pipeline — an unremoved `NaN` would poison the entire distance matrix
+    without any visible error. Calling `tknndigraph`/`plottmgraph` directly
+    on unclean data still raises an error, per the usual `rmmissing`-first
+    convention.
+
+    At `downsample (N) = 1` a row with any missing selected variable is
+    dropped, leaving a real gap in time. When downsampling, each kept sample
+    is an average over its window and that average simply skips missing
+    inputs — so an isolated `NaN` costs no sample at all, and only a sample
+    whose entire window is missing is dropped. The status area reports the
+    count either way.
 
 !!! note "Downsampling anti-aliases first"
     Setting `downsample (N) > 1` applies a moving-average lowpass over a
     window of size N before striding, rather than naively picking every Nth
     raw row.
+
+    Decimation runs on the **original** row grid, never on the rows left
+    after missing-data removal. Striding the survivors would slide every
+    later sample off the true time grid, inventing gaps between samples that
+    were in fact evenly spaced.
+
+!!! note "Real gaps stay gaps in time"
+    `tknndigraph`'s `tidx` argument is what tells the pipeline which samples
+    are *temporally* adjacent — it links two points only when their `tidx`
+    differs by exactly 1. The app derives `tidx` from elapsed position rather
+    than array position, so a genuine break in the data (a dropped row, or a
+    restricted row range) leaves a jump and no temporal edge is fabricated
+    across it.
 
 ## Stop cancels between, not mid-stage
 
