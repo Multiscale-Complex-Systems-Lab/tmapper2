@@ -364,7 +364,7 @@ runnableRange = strrep(runnableRange, 'addpath("tmapper_tools/")', '');
 figsBeforeR = findobj('Type','figure');
 eval(runnableRange);
 newFigsR = setdiff(findobj('Type','figure'), figsBeforeR);
-assert(isequal(baseRows, 50:150), 'start row=50, end row=150, downsample=1 should select rows 50:150.');
+assert(isequal(baseRows(:), (50:150)'), 'start row=50, end row=150, downsample=1 should select rows 50:150.');
 assert(isequal(dat.z(baseRows), (50:150)'), ...
     'the selected rows should correspond to the requested window of the original table.');
 close(newFigsR)
@@ -473,6 +473,49 @@ assert(numnodes(g_simp) == gapNodes && numedges(g_simp) == gapEdges, ...
     'generated code should reproduce the same network the GUI built on gapped data.');
 close(newFigsG)
 delete(appGap);
+
+% -- decimation must happen on the ORIGINAL row grid, not on the list of
+% rows left after missing-data removal. Striding the survivors slides
+% every later sample off the true time grid, so samples that were in
+% fact evenly spaced start showing fabricated gaps.
+rng(4);
+Ndec = 200;
+TDec = table();
+TDec.x = sin((1:Ndec)'/10);
+TDec.y = cos((1:Ndec)'/10);
+TDec.z = (1:Ndec)';
+TDec.x(37) = NaN; % an isolated hole, sitting ON the grid (37 = 1 + 4*9)
+
+appDec = TemporalMapperApp;
+appDec.loadData(TDec);
+appDec.VariableListBox.Value = 1:3;
+appDec.KEditField.String = '3';
+appDec.DEditField.String = '2';
+appDec.TExcludeEditField.String = '5';
+appDec.RangeStartEditField.String = '1';
+appDec.RangeEndEditField.String = 'Inf';
+appDec.DownsampleEditField.String = '4';
+appDec.buildNetwork();
+
+codeDec = appDec.generateCode();
+runnableDec = strrep(codeDec, placeholder, 'dat = TDec;');
+runnableDec = strrep(runnableDec, 'addpath("tmapper_tools/")', '');
+figsBeforeD = findobj('Type','figure');
+eval(runnableDec);
+newFigsD = setdiff(findobj('Type','figure'), figsBeforeD);
+
+assert(all(mod(baseRows(:) - 1, 4) == 0), ...
+    'every kept sample must sit on the original decimation grid (rows 1, 5, 9, ...).');
+% an isolated missing value costs no sample at all: the anti-aliasing
+% average simply skips it, exactly as the Python app's rolling mean does
+assert(ismember(37, baseRows), ...
+    'an isolated missing value should be absorbed by the anti-aliasing average, not cost a whole sample.');
+assert(isequal(tidx(:), (baseRows(:) - baseRows(1))/4 + 1), ...
+    'tidx should count decimated intervals from the first kept sample.');
+assert(all(diff(tidx(:)) == 1), ...
+    'evenly spaced samples must not show fabricated gaps after downsampling.');
+close(newFigsD)
+delete(appDec);
 
 delete(app);
 close all

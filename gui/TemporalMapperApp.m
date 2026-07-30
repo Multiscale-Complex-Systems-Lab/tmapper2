@@ -222,39 +222,44 @@ classdef TemporalMapperApp < handle
             end
             downsample = app.parseNumericField(app.DownsampleEditField, 'downsample factor', 1, Inf, true, false);
 
-            % -- drop rows with missing (NaN) values in the selected
-            % variables BEFORE lowpass filtering/downsampling: movmean
-            % (like zscore) propagates NaN across its averaging window, so
-            % leaving gaps in place would poison their neighbors too. This
-            % automates tmapper_demo.m's convention of rmmissing-ing the
-            % table up front, rather than assuming the user already did it
-            % -- a network built from unremoved NaNs degenerates silently
-            % (zscore/pdist2 both propagate NaN across an entire column/
-            % matrix), so dropping is not optional here.
+            % -- anti-aliasing lowpass filter, then decimate ON THE
+            % ORIGINAL ROW GRID. A plain strided pick (every Nth row) can
+            % alias high-frequency content in the raw variables into
+            % spurious low-frequency structure, so smoothing over a window
+            % the size of the downsample factor first (movmean -- base
+            % MATLAB, no toolbox needed) attenuates it. No-op when
+            % downsample==1.
+            %   Decimating the ORIGINAL grid rather than the list of rows
+            % left after missing-data removal matters: striding the
+            % survivors slides every later sample off the true time grid,
+            % so samples that were in fact evenly spaced start showing
+            % fabricated gaps.
+            %   'omitnan' lets the average simply skip a missing input, so
+            % an isolated NaN costs no sample at all; only a grid point
+            % whose whole window is missing survives as NaN and gets
+            % dropped below. Missing data must not reach the pipeline
+            % either way -- zscore and pdist2 both propagate NaN across an
+            % entire column/matrix, so a network built from unremoved NaNs
+            % degenerates silently.
             windowRows = (startRow:endRow)';
-            missingMask = any(isnan(app.DataTable{windowRows,selectedVars}), 2);
-            cleanRows = windowRows(~missingMask);
-            nDropped = numel(windowRows) - numel(cleanRows);
+            windowVals = app.DataTable{windowRows,selectedVars};
+            if downsample > 1
+                smoothVals = movmean(windowVals, downsample, 1, 'omitnan');
+            else
+                smoothVals = windowVals;
+            end
+            gridIdx = (1:downsample:numel(windowRows))';
+            gridRows = windowRows(gridIdx);
+            gridVals = smoothVals(gridIdx,:);
 
-            baseRows = cleanRows(1:downsample:end);
+            keepMask = ~any(isnan(gridVals), 2);
+            baseRows = gridRows(keepMask);
+            filteredVals = gridVals(keepMask,:);
+            nDropped = numel(gridRows) - numel(baseRows);
+
             if numel(baseRows) < 2
                 error('TemporalMapperApp:invalidRange', ...
                     'Row range/downsampling/missing-data removal leaves only %d row(s) -- need at least 2.', numel(baseRows));
-            end
-
-            % -- anti-aliasing lowpass filter before downsampling: a plain
-            % strided pick (every Nth row) can alias high-frequency content
-            % in the raw variables into spurious low-frequency structure.
-            % Smoothing over a window the size of the downsample factor
-            % first (movmean -- built into base MATLAB, no toolbox needed)
-            % attenuates that content before it gets aliased. No-op when
-            % downsample==1 (nothing to alias).
-            windowVals = app.DataTable{cleanRows,selectedVars};
-            if downsample > 1
-                smoothVals = movmean(windowVals, downsample, 1);
-                filteredVals = smoothVals(1:downsample:end,:);
-            else
-                filteredVals = windowVals;
             end
 
             if app.ZscoreCheckBox.Value
@@ -373,7 +378,7 @@ classdef TemporalMapperApp < handle
                 timingLine};
             if nDropped > 0
                 statusLines{end+1} = sprintf(['Dropped %d of %d row(s) in the selected range due to ' ...
-                    'missing values in the selected variables.'], nDropped, numel(windowRows));
+                    'missing values in the selected variables.'], nDropped, numel(gridRows));
             end
             app.StatusTextArea.String = statusLines;
         end
@@ -538,29 +543,34 @@ classdef TemporalMapperApp < handle
             L{end+1} = '';
             L{end+1} = sprintf('selectedVars = {%s};', varListStr);
             L{end+1} = sprintf('startRow = %g; endRow = %g; downsample = %g;', startRow, endRow, downsample);
-            L{end+1} = '%% drop rows with missing (NaN) values in the selected variables before';
-            L{end+1} = '%% lowpass filtering/downsampling -- movmean (like zscore) propagates NaN';
-            L{end+1} = '%% across its averaging window, so leaving gaps in place would poison';
-            L{end+1} = '%% their neighbors too.';
-            L{end+1} = 'windowRows = startRow:endRow;';
-            L{end+1} = 'missingMask = any(isnan(dat{windowRows,selectedVars}), 2);';
-            L{end+1} = 'cleanRows = windowRows(missingMask == 0);';
-            L{end+1} = 'nDropped = numel(windowRows) - numel(cleanRows);';
+            L{end+1} = 'windowRows = (startRow:endRow)'';';
+            L{end+1} = 'windowVals = dat{windowRows,selectedVars};';
+            if downsample > 1
+                L{end+1} = '%% anti-aliasing lowpass filter before decimating (moving average over';
+                L{end+1} = '%% the downsample window, so striding below doesn''t alias high-frequency';
+                L{end+1} = '%% content into spurious low-frequency structure). ''omitnan'' lets the';
+                L{end+1} = '%% average skip a missing input, so an isolated NaN costs no sample.';
+                L{end+1} = sprintf('smoothVals = movmean(windowVals, %g, 1, ''omitnan'');', downsample);
+            else
+                L{end+1} = 'smoothVals = windowVals;';
+            end
+            L{end+1} = '%% decimate on the ORIGINAL row grid, not on the rows left after';
+            L{end+1} = '%% missing-data removal -- striding the survivors would slide every later';
+            L{end+1} = '%% sample off the true time grid, inventing gaps between samples that';
+            L{end+1} = '%% were in fact evenly spaced.';
+            L{end+1} = sprintf('gridIdx = (1:%g:numel(windowRows))'';', downsample);
+            L{end+1} = 'gridRows = windowRows(gridIdx);';
+            L{end+1} = 'gridVals = smoothVals(gridIdx,:);';
+            L{end+1} = '%% zscore and pdist2 both propagate NaN across a whole column/matrix, so';
+            L{end+1} = '%% any grid point still missing has to go.';
+            L{end+1} = 'keepMask = any(isnan(gridVals), 2) == 0;';
+            L{end+1} = 'baseRows = gridRows(keepMask);';
+            L{end+1} = 'filteredVals = gridVals(keepMask,:);';
+            L{end+1} = 'nDropped = numel(gridRows) - numel(baseRows);';
             L{end+1} = 'if nDropped > 0';
             L{end+1} = ['    warning(''TemporalMapper:missingData'', ''Dropped %d of %d row(s) due ' ...
-                'to missing values in the selected variables.'', nDropped, numel(windowRows));'];
+                'to missing values in the selected variables.'', nDropped, numel(gridRows));'];
             L{end+1} = 'end';
-            L{end+1} = 'baseRows = cleanRows(1:downsample:end);';
-            if downsample > 1
-                L{end+1} = '%% anti-aliasing lowpass filter before downsampling (moving average';
-                L{end+1} = '%% over the downsample window, so striding below doesn''t alias';
-                L{end+1} = '%% high-frequency content into spurious low-frequency structure)';
-                L{end+1} = 'windowVals = dat{cleanRows,selectedVars};';
-                L{end+1} = sprintf('smoothVals = movmean(windowVals, %g, 1);', downsample);
-                L{end+1} = sprintf('filteredVals = smoothVals(1:%g:end,:);', downsample);
-            else
-                L{end+1} = 'filteredVals = dat{baseRows,selectedVars};';
-            end
             if app.ZscoreCheckBox.Value
                 L{end+1} = 'X = zscore(filteredVals);';
             else
