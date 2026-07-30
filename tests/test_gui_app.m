@@ -411,6 +411,69 @@ delete(appMissing);
 assert(~any(contains(app.StatusTextArea.String, 'Dropped')), ...
     'a build with no missing data should not emit a dropped-rows warning.');
 
+% -- tidx must track ELAPSED time, not array position. tknndigraph links
+% two points in time only when their tidx differs by exactly 1, so if
+% tidx is just 1:N over the SURVIVING rows, dropping a row silently
+% renumbers its neighbours as adjacent and a temporal edge gets
+% fabricated straight across a real gap in the data.
+rng(3);
+Ngap = 100;
+TGap = table();
+TGap.x = sin((1:Ngap)'/10);
+TGap.y = cos((1:Ngap)'/10);
+TGap.z = (1:Ngap)';
+TGap.x(50) = NaN; % punch a one-row hole, so rows 49 and 51 are NOT adjacent in time
+
+appGap = TemporalMapperApp;
+appGap.loadData(TGap);
+appGap.VariableListBox.Value = 1:3;
+appGap.KEditField.String = '3';
+appGap.DEditField.String = '2';
+appGap.TExcludeEditField.String = '5';
+appGap.RangeStartEditField.String = '1';
+appGap.RangeEndEditField.String = 'Inf';
+appGap.DownsampleEditField.String = '1';
+appGap.buildNetwork();
+tokGap = regexp(appGap.StatusTextArea.String{1}, 'Built network: (\d+) nodes, (\d+) edges', 'tokens');
+gapNodes = str2double(tokGap{1}{1});
+gapEdges = str2double(tokGap{1}{2});
+
+codeGap = appGap.generateCode();
+runnableGap = strrep(codeGap, placeholder, 'dat = TGap;');
+runnableGap = strrep(runnableGap, 'addpath("tmapper_tools/")', '');
+figsBeforeG = findobj('Type','figure');
+eval(runnableGap);
+newFigsG = setdiff(findobj('Type','figure'), figsBeforeG);
+
+assert(numel(tidx) == Ngap-1, ...
+    sprintf('one row should have been dropped: expected %d tidx entries, got %d.', Ngap-1, numel(tidx)));
+% the invariant: tidx counts sampling intervals from the first kept row,
+% so it inherits the hole rather than closing it up
+assert(isequal(tidx(:), baseRows(:) - baseRows(1) + 1), ...
+    'tidx should count elapsed sampling intervals from the first kept row, not array position.');
+assert(any(diff(tidx) == 2), ...
+    'tidx should show a gap (a step of 2) where the missing row was dropped.');
+% and the consequence that actually matters: the pair straddling the gap
+% must not satisfy tknndigraph's temporal-adjacency predicate, so no
+% temporal edge is fabricated across it. Tested via the predicate itself
+% rather than findedge, because the two rows either side of a one-sample
+% hole are still near-neighbours in state space and may legitimately be
+% linked *spatially* -- findedge alone can't tell the two apart.
+% tidx(:) first: the generated script builds its row list as a row
+% vector, and circshift along dim 1 of a row vector is a silent no-op --
+% tknndigraph itself normalises with tidx(:) for the same reason.
+tv = tidx(:);
+t_wafter = circshift(tv,-1,1) - 1 == tv; % tknndigraph's own test
+assert(~t_wafter(49), ...
+    'the sample before the gap must not count as temporally adjacent to the one after it.');
+assert(all(t_wafter(1:48)) && all(t_wafter(50:end-1)), ...
+    'every genuinely consecutive pair should still count as temporally adjacent.');
+% the app's own build and the generated script must agree
+assert(numnodes(g_simp) == gapNodes && numedges(g_simp) == gapEdges, ...
+    'generated code should reproduce the same network the GUI built on gapped data.');
+close(newFigsG)
+delete(appGap);
+
 delete(app);
 close all
 

@@ -297,7 +297,15 @@ classdef TemporalMapperApp < handle
             % may already be a range-restricted/downsampled subset.
             rows = baseRows((N_raw-N+1):N_raw);
 
-            tidx = (1:N)';
+            % -- tidx counts elapsed SAMPLING INTERVALS from the first
+            % kept row, not position in the array. tknndigraph treats two
+            % points as temporally adjacent only when their tidx differs
+            % by exactly 1, so numbering the survivors 1:N would renumber
+            % the neighbours of a dropped row as adjacent and fabricate a
+            % temporal edge straight across a real gap in the data.
+            % Dividing by downsample puts it in decimated units, so
+            % consecutive kept samples still differ by 1.
+            tidx = (rows - rows(1))/downsample + 1;
 
             k = app.parseNumericField(app.KEditField, 'k (neighbors)', 1, Inf, true, false);
             d = app.parseNumericField(app.DEditField, 'd (compression)', 0, Inf, false, true);
@@ -575,7 +583,12 @@ classdef TemporalMapperApp < handle
             else
                 L{end+1} = 'rows = baseRows;';
             end
-            L{end+1} = 'tidx = (1:size(X,1))'';';
+            L{end+1} = '%% tidx counts elapsed sampling intervals from the first kept row, not';
+            L{end+1} = '%% array position: tknndigraph links two points in time only when their';
+            L{end+1} = '%% tidx differs by exactly 1, so numbering the surviving rows 1:N would';
+            L{end+1} = '%% close up any gap left by a dropped row and fabricate a temporal edge';
+            L{end+1} = '%% across it.';
+            L{end+1} = sprintf('tidx = (rows - rows(1))/%g + 1;', downsample);
             L{end+1} = 'D = pdist2(X,X,''minkowski'',2);';
             L{end+1} = '';
             L{end+1} = sprintf(['[g, par] = tknndigraph(D, %g, tidx, ''timeExcludeRange'', %g, ' ...
