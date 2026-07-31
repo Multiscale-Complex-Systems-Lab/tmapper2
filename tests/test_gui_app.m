@@ -139,6 +139,16 @@ assert(contains(app.StatusTextArea.String{1}, 'Re-rendered plot (network unchang
 app.ShowNodeBorderCheckBox.Value = 0;
 app.ShowNodeBorderCheckBox.Callback(app.ShowNodeBorderCheckBox, []);
 
+app.ColormapDropDown.Value = find(strcmp(app.ColormapDropDown.String, 'parula'));
+app.ColormapDropDown.Callback(app.ColormapDropDown, []);
+assert(contains(app.StatusTextArea.String{1}, 'Re-rendered plot (network unchanged)'), ...
+    'Changing Colormap should re-render, not rebuild.');
+% the chosen map must actually reach the axes, not just the dropdown
+assert(isequal(colormap(app.NetworkAxes), parula(size(colormap(app.NetworkAxes),1))), ...
+    'the selected colormap should be applied to the network axes.');
+app.ColormapDropDown.Value = find(strcmp(app.ColormapDropDown.String, 'jet'));
+app.ColormapDropDown.Callback(app.ColormapDropDown, []);
+
 app.ShowRecurrenceCheckBox.Value = 0;
 app.ShowRecurrenceCheckBox.Callback(app.ShowRecurrenceCheckBox, []);
 assert(contains(app.StatusTextArea.String{1}, 'Re-rendered plot (network unchanged)'), ...
@@ -219,6 +229,37 @@ assert(strcmp(appBig.StatusTextArea.String{1}, 'Build cancelled.'), ...
 assert(strcmp(appBig.BuildButton.Enable,'on') && strcmp(appBig.StopButton.Enable,'off'), ...
     'Build should be re-enabled and Stop disabled again after a cancelled build.');
 delete(appBig);
+
+% -- memory guard: a full pairwise distance matrix is O(N^2), so an
+% untrimmed real dataset can ask for tens of GB. Refuse with a number the
+% user can act on rather than hanging or exhausting memory.
+assert(isempty(TemporalMapperApp.oversizedWindowMessage(100)), ...
+    'a small window should not trip the memory guard.');
+bigMsg = TemporalMapperApp.oversizedWindowMessage(50000);
+assert(~isempty(bigMsg) && contains(bigMsg, 'GB'), ...
+    'an oversized window should be refused with a memory estimate.');
+assert(contains(bigMsg, '20.0 GB'), ...
+    'the estimate should be the actual size of the matrix (50000^2 float64 = 20 GB).');
+
+% the guard counts points AFTER decimation, so downsampling is a real fix
+% rather than a way to sidestep the check
+appBigWin = TemporalMapperApp;
+TBigWin = table();
+TBigWin.x = sin((1:9000)'/50);
+TBigWin.y = cos((1:9000)'/50);
+appBigWin.loadData(TBigWin);
+appBigWin.VariableListBox.Value = 1:2;
+appBigWin.KEditField.String = '3';
+appBigWin.DEditField.String = '2';
+appBigWin.TExcludeEditField.String = '5';
+assertThrows(@() appBigWin.buildNetwork(), 'TemporalMapperApp:windowTooLarge', ...
+    'building on an oversized row range should be refused up front.');
+% ...and it must refuse BEFORE doing the expensive work, not after
+appBigWin.DownsampleEditField.String = '10'; % 9000 -> 900 points
+appBigWin.buildNetwork();
+assert(contains(appBigWin.StatusTextArea.String{1}, 'Built network:'), ...
+    'downsampling below the threshold should let the same range build.');
+delete(appBigWin);
 
 % -- generateCode: error path
 app3 = TemporalMapperApp;

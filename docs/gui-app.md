@@ -61,6 +61,12 @@ the recurrence plot / a node-border scatter overlay. Changing any of these
 **re-renders the existing network instead of rebuilding it** — cheap, and
 safe to click through freely once a build has completed.
 
+!!! note "Colormap"
+    `jet` by default, matching `plottmgraph`'s own default. `lines`,
+    `prism` and `colorcube` are **qualitative** — adjacent entries are
+    unrelated rather than a ramp — which is what discrete labels need; the
+    rest are continuous.
+
 !!! note "Date columns"
     `readtable` turns a date column into `datetime` automatically, and those
     columns are offered for **Color by** and **Time axis** — so the GUI can
@@ -77,6 +83,14 @@ safe to click through freely once a build has completed.
 
 Several things the scripted pipeline leaves to you are handled automatically
 here:
+
+!!! note "Oversized row ranges are refused, not attempted"
+    The pairwise distance matrix is O(N²), so an untrimmed real dataset can
+    ask for tens of gigabytes — the bundled sample's full 57 709 rows would
+    need ~27 GB. Rather than thrash or exhaust memory, the app refuses up
+    front, before any of the expensive work, and tells you the figure and
+    how to fix it. The count is taken *after* decimation, so raising
+    **downsample (N)** is a real fix rather than a way around the check.
 
 !!! note "A stray row-index column is dropped"
     Writing a CSV without suppressing the index leaves an unnamed first
