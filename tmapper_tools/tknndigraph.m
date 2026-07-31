@@ -137,10 +137,23 @@ A(D<=dmax) = true; % other points with the same distance are also included
 % compute -- D's masked entries are Inf, so the answer is always Inf and
 % the absolute cutoff wins -- and skipping it avoids sorting all Nn^2
 % distances just to learn that.
+% The percentile is taken over FINITE distances only. By this point D has
+% Inf wherever a pair is excluded from being spatial neighbours -- the
+% diagonal, and every temporal pair within timeExcludeRange -- and those
+% Infs sit at the top of the distribution, so including them dragged the
+% cutoff upward and made it more permissive than asked for. With
+% texclude=30 on 1500 points the 99th percentile came out as Inf outright:
+% a request to drop the most distant 1% of neighbours silently applied no
+% cutoff at all.
 if par.maxNeighborDistPrct >= 100
     prctThreshold = Inf;
 else
-    prctThreshold = prctile(D(:),par.maxNeighborDistPrct);
+    finiteD = D(isfinite(D));
+    if isempty(finiteD)
+        prctThreshold = Inf; % nothing finite to take a percentile of
+    else
+        prctThreshold = prctile(finiteD,par.maxNeighborDistPrct);
+    end
 end
 par.maxNeighborDist = min(prctThreshold,par.maxNeighborDist);
 

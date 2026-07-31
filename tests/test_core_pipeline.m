@@ -163,14 +163,16 @@ assert(findedge(g_maxdist,4,6) == 0, 'expected spatial shortcut 4->6 to be cut b
 % wiring rather than re-deriving MATLAB's percentile interpolation by hand).
 % The percentile is computed internally on the *masked* D (self-loops and
 % the default timeExcludeRange=1 temporal-successor entries set to Inf), so
-% replicate that masking here rather than using the raw Dd.
+% replicate that masking here rather than using the raw Dd -- and over the
+% FINITE entries only, since those Infs are excluded pairs rather than real
+% distances and would otherwise drag the cutoff upward.
 prct = 30;
 Dd_masked = Dd;
 Dd_masked(logical(eye(Nd))) = Inf;
 for i = 1:Nd-1
     Dd_masked(i,i+1) = Inf;
 end
-equivalent_threshold = prctile(Dd_masked(:), prct);
+equivalent_threshold = prctile(Dd_masked(isfinite(Dd_masked)), prct);
 g_prct = tknndigraph(Dd,kd,tidxd,'maxNeighborDistPrct',prct);
 g_equivdist = tknndigraph(Dd,kd,tidxd,'maxNeighborDist',equivalent_threshold);
 assert(isequal(adjacency(g_prct), adjacency(g_equivdist)), ...
