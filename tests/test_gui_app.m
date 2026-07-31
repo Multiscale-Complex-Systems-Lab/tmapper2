@@ -574,6 +574,64 @@ assert(isdatetime(t), ...
 close(newFigsDt)
 delete(appDate);
 
+% -- a leading unnamed row-index column (readtable names it "Var1") is a
+% stray artifact of writing a CSV with the index included. It is a
+% monotonic ramp, so leaving it selectable -- and selected by default --
+% silently dominates the distance computation.
+TIdx = table();
+TIdx.Var1 = (1:120)'; % the artifact
+TIdx.Date = (datetime(2020,1,1) + days(0:119))';
+TIdx.tmax = sin((1:120)'/10);
+TIdx.tmin = cos((1:120)'/10);
+
+appIdx = TemporalMapperApp;
+appIdx.loadData(TIdx);
+assert(~any(strcmp(appIdx.VariableListBox.String, 'Var1')), ...
+    'a leading row-index column should not be offered as a build variable.');
+assert(isequal(appIdx.VariableListBox.String(:), {'tmax';'tmin'}), ...
+    'the remaining build variables should be the real ones.');
+assert(~any(strcmp(appIdx.ColorVarDropDown.String, 'Var1')), ...
+    'a leading row-index column should not be offered for colouring either.');
+
+% it must NOT fire on a genuinely header-less file, where readtable names
+% EVERY column VarN -- there is no way to tell an index from real data
+TAllVar = table();
+TAllVar.Var1 = (1:50)';
+TAllVar.Var2 = sin((1:50)'/5);
+TAllVar.Var3 = cos((1:50)'/5);
+appAllVar = TemporalMapperApp;
+appAllVar.loadData(TAllVar);
+assert(any(strcmp(appAllVar.VariableListBox.String, 'Var1')), ...
+    'Var1 must be kept when every column is auto-named -- that is a header-less file, not a stray index.');
+delete(appAllVar);
+
+% nor on a Var1 that is real data rather than a row index
+TRealVar1 = table();
+TRealVar1.Var1 = sin((1:50)'/5); % not monotonic -- real data
+TRealVar1.tmax = cos((1:50)'/5);
+appRealVar1 = TemporalMapperApp;
+appRealVar1.loadData(TRealVar1);
+assert(any(strcmp(appRealVar1.VariableListBox.String, 'Var1')), ...
+    'a non-monotonic Var1 is real data and must be kept.');
+delete(appRealVar1);
+
+% the generated script must drop it too, so its "dat" matches the app's
+appIdx.VariableListBox.Value = 1:2;
+appIdx.KEditField.String = '3';
+appIdx.DEditField.String = '2';
+appIdx.TExcludeEditField.String = '5';
+appIdx.buildNetwork();
+codeIdx = appIdx.generateCode();
+runnableIdx = strrep(codeIdx, placeholder, 'dat = TIdx;');
+runnableIdx = strrep(runnableIdx, 'addpath("tmapper_tools/")', '');
+figsBeforeI = findobj('Type','figure');
+eval(runnableIdx);
+newFigsI = setdiff(findobj('Type','figure'), figsBeforeI);
+assert(~any(strcmp(dat.Properties.VariableNames, 'Var1')), ...
+    'generated code should drop the row-index column as the app did.');
+close(newFigsI)
+delete(appIdx);
+
 delete(app);
 close all
 

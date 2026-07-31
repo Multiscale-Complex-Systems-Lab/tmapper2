@@ -40,7 +40,7 @@ with per-step timing once a build finishes.
 
 ### Variables & Preprocessing
 
-- **Variables** — the numeric columns to build the network from (⌘/Ctrl/Shift-click for multiple; **Select All** as a shortcut).
+- **Variables** — the numeric columns to build the network from (⌘/Ctrl/Shift-click for multiple; **Select All** as a shortcut). A leading unnamed row-index column is dropped automatically — see [below](#missing-data-and-downsampling).
 - **z-score variables** — on by default; see the Quickstart's [note on why](quickstart.md#step-1-load-and-select-the-data).
 - **start row / end row** — restrict the build to a sub-range of the loaded data. `end row = Inf` means "the last row."
 - **downsample (N)** — keep every Nth row. A moving-average lowpass is applied first so this doesn't alias high-frequency content into spurious low-frequency structure — see [below](#missing-data-and-downsampling).
@@ -74,7 +74,21 @@ safe to click through freely once a build has completed.
 
 ## Missing data and downsampling
 
-Two things the scripted pipeline leaves to you are handled automatically here:
+Several things the scripted pipeline leaves to you are handled automatically
+here:
+
+!!! note "A stray row-index column is dropped"
+    Writing a CSV without suppressing the index leaves an unnamed first
+    column, which `readtable` names `Var1`. It is just a monotonic ramp, so
+    leaving it selectable — and selected by default — would silently
+    dominate the distance computation. It is dropped on load and the status
+    area says so.
+
+    `Var1` is a weaker signal than it looks, since MATLAB also auto-names
+    every column of a genuinely header-less file, so the check additionally
+    requires that some *other* column is properly named and that the column
+    really does look like a row index (numeric and strictly increasing).
+    A `Var1` holding real data is kept.
 
 !!! note "Missing data is handled, not ignored"
     A missing value in any selected variable is never passed through to the

@@ -97,6 +97,7 @@ classdef TemporalMapperApp < handle
         DataTable = table()   % the loaded data
         NumericVarNames = {}  % candidate columns (numeric only)
         DatetimeVarNames = {} % datetime columns: colour/time axis only, never build variables
+        DroppedIndexCol = false % whether loadData stripped a leading row-index column
         ExtraColorVarNames = {}  % display names of workspace-sourced color vectors
         ExtraColorVarValues = {} % their values, parallel to ExtraColorVarNames
         DataSourceCode = '% dat = <load your data here as a table, e.g. dat = readtable(''your_file.csv'');>' % how "dat" was obtained, for generateCode
@@ -127,6 +128,26 @@ classdef TemporalMapperApp < handle
             %list and color/time dropdowns. Used both by the "Load
             %Data..." button (after reading the picked file) and directly
             %by scripts/tests that want to bypass the file picker.
+            % -- drop a leading row-index column before anything else. A
+            % CSV written without suppressing the index gets an unnamed
+            % first column, which readtable names "Var1"; it is just a
+            % monotonic ramp, so leaving it selectable (and selected by
+            % default) would silently dominate the distance computation.
+            %   "Var1" alone is a weaker signal than pandas' "Unnamed: 0",
+            % since MATLAB also auto-names the columns of a genuinely
+            % header-less file, so this additionally requires that some
+            % other column IS named, and that the column actually looks
+            % like a row index. Better to keep a stray column than to
+            % silently delete someone's data.
+            droppedIndexCol = false;
+            allNames = T.Properties.VariableNames;
+            if numel(allNames) > 1 && strcmp(allNames{1}, 'Var1') && ...
+                    ~all(startsWith(allNames, 'Var')) && ...
+                    isnumeric(T{:,1}) && all(diff(T{:,1}) > 0)
+                T(:,1) = [];
+                droppedIndexCol = true;
+            end
+
             isnum = varfun(@isnumeric, T, 'OutputFormat','uniform');
             varNames = T.Properties.VariableNames(isnum);
             if isempty(varNames)
@@ -144,6 +165,7 @@ classdef TemporalMapperApp < handle
             app.DataTable = T;
             app.NumericVarNames = varNames;
             app.DatetimeVarNames = dateNames;
+            app.DroppedIndexCol = droppedIndexCol;
             % any workspace-sourced color vectors were aligned to the
             % previous data's row count, so they no longer apply
             app.ExtraColorVarNames = {};
@@ -160,7 +182,12 @@ classdef TemporalMapperApp < handle
             app.TimeVarDropDown.String = [{'(row index)'}, varNames, dateNames];
             app.TimeVarDropDown.Value = 1;
             app.FileLabel.String = sprintf('Loaded: %d rows, %d numeric vars', height(T), numel(varNames));
-            app.StatusTextArea.String = {sprintf('Loaded data: %d rows, %d numeric variables.', height(T), numel(varNames))};
+            loadedMsg = {sprintf('Loaded data: %d rows, %d numeric variables.', height(T), numel(varNames))};
+            if droppedIndexCol
+                loadedMsg{end+1} = ['Dropped a leading unnamed row-index column ("Var1") -- ' ...
+                    'it is a monotonic ramp that would dominate the distance computation.'];
+            end
+            app.StatusTextArea.String = loadedMsg;
         end
 
         function addColorVarFromWorkspace(app, name, v)
@@ -555,6 +582,12 @@ classdef TemporalMapperApp < handle
             L{end+1} = 'addpath("tmapper_tools/")';
             L{end+1} = '';
             L{end+1} = app.DataSourceCode;
+            if app.DroppedIndexCol
+                L{end+1} = '%% drop the leading unnamed row-index column (readtable names it';
+                L{end+1} = '%% "Var1") -- a monotonic ramp left over from writing a CSV without';
+                L{end+1} = '%% suppressing the index, which would dominate the distances.';
+                L{end+1} = 'dat(:,1) = [];';
+            end
             L{end+1} = '';
             L{end+1} = sprintf('selectedVars = {%s};', varListStr);
             L{end+1} = sprintf('startRow = %g; endRow = %g; downsample = %g;', startRow, endRow, downsample);
