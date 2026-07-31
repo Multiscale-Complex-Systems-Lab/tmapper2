@@ -110,6 +110,9 @@ tidx = (1:length(t))';   % integer index per time point, used to define temporal
     adjacent moments. `1` is a common default; the demo uses `30`.
 3.  **`maxNeighborDistPrct`** — a distance cutoff expressed as a percentile of
     all pairwise distances (95 = ignore the most distant 5% as neighbors).
+    Taken over *eligible* pairs only: the diagonal and the temporal pairs
+    inside `texclude` are already barred from being spatial neighbors, so
+    they are left out of the percentile rather than counted at the top of it.
 4.  **`maxNeighborDist`** — the same cutoff as an absolute distance. When both
     are given, the **smaller** (stricter) threshold is applied.
 

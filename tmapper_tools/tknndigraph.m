@@ -28,7 +28,11 @@ function [g, par] = tknndigraph(XorD,k,tidx,varargin)
 %   maxNeighborDistPrct is also given, actual threshold will be the min of
 %   the two.
 %   maxNeighborDistPrct: maximal percentile distance between two points for
-%   them to be considered as spatial neighbors. Default 100 (so no max). If
+%   them to be considered as spatial neighbors. Taken over the FINITE
+%   distances only -- pairs already excluded from being spatial neighbors
+%   (the diagonal, and temporal pairs within timeExcludeRange) are held as
+%   Inf internally, and counting them would drag the cutoff upward.
+%   Default 100 (so no max). If
 %   maxNeighborDist is also given, actual threshold will be the min of the
 %   two. 
 %{
