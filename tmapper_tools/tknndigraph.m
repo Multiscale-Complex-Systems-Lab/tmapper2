@@ -97,7 +97,9 @@ if k >= Nn
     error('tknndigraph:invalidInput','k must be smaller than the number of points (%d).',Nn);
 end
 
-D(logical(eye(Nn))) = Inf; % exclude self-loops
+D(1:Nn+1:end) = Inf; % exclude self-loops (linear indexing: logical(eye(Nn))
+                     % built a whole Nn-by-Nn double, then a logical copy of
+                     % it, just to address the diagonal -- gigabytes at scale)
 
 % -- find indices for temporal links D_{i(t),i(t+1)}
 % Built as sparse bands rather than by OR-ing shifted full Nn-by-Nn

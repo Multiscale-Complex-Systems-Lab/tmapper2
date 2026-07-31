@@ -1585,19 +1585,28 @@ classdef TemporalMapperApp < handle
             %OVERSIZEDWINDOWMESSAGE the error text for a row range whose
             %full pairwise distance matrix would be unreasonably large,
             %or '' if it is fine.
-            %   pdist2 allocates nPoints^2 doubles, so an untrimmed real
-            %   dataset can ask for tens of GB -- the bundled sample's
-            %   full 57709 rows would need ~27 GB. Far better to refuse
-            %   with a number the user can act on than to let MATLAB
-            %   thrash or run the machine out of memory.
+            %   Peak cost is ~26.3 bytes per nPoints^2 -- about 3.3x the
+            %   distance matrix itself, since the pipeline holds several
+            %   nPoints-by-nPoints arrays at once (D, its working copy,
+            %   the geodesic matrix, and assorted logical masks). That
+            %   figure is measured, not assumed: process peak working set
+            %   was sampled from 2k to 20k points, and the model predicts
+            %   the 20k case to within 0.7%.
+            %   An untrimmed real dataset asks for absurd amounts on this
+            %   curve -- the bundled sample's full 57709 rows would need
+            %   ~87 GB -- so refuse with a number the user can act on
+            %   rather than let MATLAB thrash.
             %   Counted AFTER decimation, so raising downsample is a
             %   genuine fix rather than a way to sidestep the check.
-            maxPoints = 8000; % ~0.5 GB for the distance matrix alone
+            bytesPerSquare = 26.3;
+            budgetGB = 2; % the limit is a memory budget, not a magic count
+            maxPoints = floor(sqrt(budgetGB*1e9/bytesPerSquare)); % ~8.7k points
             if nPoints > maxPoints
-                msg = sprintf(['The selected range leaves %d time points -- computing a ' ...
-                    'full pairwise distance matrix at that size needs ~%.1f GB of memory. ' ...
-                    'Restrict the row range (start row/end row) or increase downsample (N).'], ...
-                    nPoints, 8*nPoints^2/1e9);
+                msg = sprintf(['The selected range leaves %d time points -- building a ' ...
+                    'network that size needs ~%.1f GB of memory (the limit here is %.0f GB, ' ...
+                    'about %d points). Restrict the row range (start row/end row) or ' ...
+                    'increase downsample (N).'], ...
+                    nPoints, bytesPerSquare*nPoints^2/1e9, budgetGB, maxPoints);
             else
                 msg = '';
             end

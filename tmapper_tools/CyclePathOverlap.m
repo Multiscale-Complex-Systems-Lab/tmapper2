@@ -59,6 +59,6 @@ for ii=1:Ngrp
     end
 end
 
-CO(logical(eye(size(CO))))=1;
+CO(1:size(CO,1)+1:end)=1;% linear indexing, no n-by-n temporary
 end
 

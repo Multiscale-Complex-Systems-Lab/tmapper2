@@ -42,7 +42,7 @@ else
 end
 Nn = length(D); % number of nodes
 
-D(logical(eye(Nn))) = Inf; % exclude self-loops
+D(1:Nn+1:end) = Inf; % exclude self-loops (linear indexing, no n-by-n temporary)
 
 % -- make sure temporal neighbors are neareat neighbors (d=0)
 t_wbefore = circshift(tidx,1,1) + 1 == tidx; % for which time points there exist a time point before
