@@ -96,36 +96,60 @@ end
 D(logical(eye(Nn))) = Inf; % exclude self-loops
 
 % -- find indices for temporal links D_{i(t),i(t+1)}
+% Built as sparse bands rather than by OR-ing shifted full Nn-by-Nn
+% diagonals: circshift(diag(...),n,2) allocated a whole Nn-by-Nn matrix on
+% every one of timeExcludeRange iterations, which dominated this function
+% for realistic texclude. Each band is just the pairs (i, i+n) for the i
+% that have a temporal successor, so build the indices directly.
 t_wafter = circshift(tidx,-1,1) - 1 == tidx; % for which time points there exist a time point after
-t_after_idx1 = circshift(diag(t_wafter),1,2); % matrix indicate immediate time points that follows
-t_after_idx = triu(zeros(Nn));% initialize time connectivity matrix to indicate time points that follows up to a range
+iAfter = find(t_wafter);
+t_after_idx1 = sparse(iAfter(iAfter+1 <= Nn), iAfter(iAfter+1 <= Nn)+1, true, Nn, Nn); % immediate successors
+rowsBand = cell(par.timeExcludeRange,1);
+colsBand = cell(par.timeExcludeRange,1);
 for n = 1:par.timeExcludeRange
-    t_after_idx = t_after_idx | circshift(diag(t_wafter),n,2);
+    r = iAfter(iAfter + n <= Nn);
+    rowsBand{n} = r;
+    colsBand{n} = r + n;
 end
+t_after_idx = sparse(vertcat(rowsBand{:}), vertcat(colsBand{:}), true, Nn, Nn);
 t_after_idx = triu(t_after_idx);% ensure time doesn't flow backward
 if par.timeExcludeSpace
     D(t_after_idx) = Inf;
 end
 
 % -- compute adjacency matrix
-A = zeros(Nn,Nn);
-[Ds,Ic]=sort(D,2);
-I = sub2ind([Nn Nn], repmat((1:Nn)',1,k), Ic(:,1:k));
-A(I(:))=1;
+% mink rather than a full sort(D,2): only the k nearest are ever used, and
+% sort's two Nn-by-Nn outputs cost hundreds of MB at realistic sizes while
+% k is typically single digits. Logical rather than double for the same
+% reason -- 1 byte per entry instead of 8.
+A = false(Nn,Nn);
+[Dk,Ik] = mink(D,k,2);
+I = sub2ind([Nn Nn], repmat((1:Nn)',1,k), Ik);
+A(I(:))=true;
 
 % -- check for duplicate points
-dmax = Ds(:,k); % maximal distance in each point's spatial neighborhood
-A(D<=repmat(dmax,1,Nn)) = 1; % other points with the same distance are also included
+dmax = Dk(:,k); % maximal distance in each point's spatial neighborhood
+A(D<=dmax) = true; % other points with the same distance are also included
+                   % (implicit expansion; repmat here built a whole Nn-by-Nn copy)
 
-% -- get distance threshold
-par.maxNeighborDist = min(prctile(D(:),par.maxNeighborDistPrct),par.maxNeighborDist);% the smaller one of the percentage vs absolute distance
+% -- get distance threshold: the smaller of the percentile-derived and the
+% absolute cutoff. At the default 100th percentile there is nothing to
+% compute -- D's masked entries are Inf, so the answer is always Inf and
+% the absolute cutoff wins -- and skipping it avoids sorting all Nn^2
+% distances just to learn that.
+if par.maxNeighborDistPrct >= 100
+    prctThreshold = Inf;
+else
+    prctThreshold = prctile(D(:),par.maxNeighborDistPrct);
+end
+par.maxNeighborDist = min(prctThreshold,par.maxNeighborDist);
 
 % -- remove neighbors that exceed max distance
-A(D>par.maxNeighborDist) = 0;
+A(D>par.maxNeighborDist) = false;
 
 % -- exclude or retain temporal links as spatial links 
 if par.timeExcludeSpace
-    A_space = A.* (~t_after_idx); % remove temporal links
+    A_space = A & ~t_after_idx; % remove temporal links (logical, not double .*)
 else
     A_space = A;
 end
