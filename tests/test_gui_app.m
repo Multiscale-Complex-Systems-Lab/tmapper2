@@ -232,6 +232,28 @@ assert(strcmp(appBig.BuildButton.Enable,'on') && strcmp(appBig.StopButton.Enable
     'Build should be re-enabled and Stop disabled again after a cancelled build.');
 delete(appBig);
 
+% -- every interactive control must explain itself. These tooltips are
+% the app's only documentation at the point of use, so a control added
+% later without one should fail here rather than ship bare. Tooltips on a
+% *label* don't count: hovering the field itself is what users do.
+appHelp = TemporalMapperApp;
+appHelp.loadData(T);
+helpProps = properties(appHelp);
+bareControls = {};
+for hi = 1:numel(helpProps)
+    h = appHelp.(helpProps{hi});
+    if isa(h, 'matlab.ui.control.UIControl') && ...
+            ismember(h.Style, {'edit','popupmenu','checkbox','listbox','pushbutton'}) && ...
+            ~strcmp(helpProps{hi}, 'StatusTextArea') % a read-only display, not an input
+        if isempty(h.TooltipString)
+            bareControls{end+1} = helpProps{hi}; %#ok<SAGROW>
+        end
+    end
+end
+assert(isempty(bareControls), ...
+    'controls with no tooltip: %s', strjoin(bareControls, ', '));
+delete(appHelp);
+
 % -- memory guard: a full pairwise distance matrix is O(N^2), so an
 % untrimmed real dataset can ask for tens of GB. Refuse with a number the
 % user can act on rather than hanging or exhausting memory.
@@ -674,6 +696,64 @@ assert(~any(strcmp(dat.Properties.VariableNames, 'Var1')), ...
     'generated code should drop the row-index column as the app did.');
 close(newFigsI)
 delete(appIdx);
+
+% -- time index column: for data with real breaks (separate sessions or
+% trials), row order alone would bridge the gap and fabricate a temporal
+% edge across it.
+TTidx = table();
+TTidx.t = [(1:50)'; (101:150)']; % a genuine 50-unit break in the middle
+TTidx.x = sin((1:100)'/10);
+TTidx.y = cos((1:100)'/10);
+TTidx.z = (1:100)';
+
+appTidx = TemporalMapperApp;
+appTidx.loadData(TTidx);
+assert(any(strcmp(appTidx.TimeIndexDropDown.String, '(from row order)')), ...
+    'the time index should default to deriving itself from row order.');
+assert(any(strcmp(appTidx.TimeIndexDropDown.String, 't')), ...
+    'a numeric column should be selectable as the time index.');
+assert(~any(strcmp(appTidx.TimeIndexDropDown.String, 'label')), ...
+    'a categorical column cannot be a time index.');
+
+appTidx.VariableListBox.Value = 1:numel(appTidx.VariableListBox.String);
+appTidx.KEditField.String = '3';
+appTidx.DEditField.String = '2';
+appTidx.TExcludeEditField.String = '5';
+appTidx.TimeIndexDropDown.Value = find(strcmp(appTidx.TimeIndexDropDown.String, 't'));
+appTidx.buildNetwork();
+
+codeTidx = appTidx.generateCode();
+runnableTidx = strrep(codeTidx, placeholder, 'dat = TTidx;');
+runnableTidx = strrep(runnableTidx, 'addpath("tmapper_tools/")', '');
+figsBeforeT = findobj('Type','figure');
+eval(runnableTidx);
+newFigsT = setdiff(findobj('Type','figure'), figsBeforeT);
+tvT = tidx(:);
+assert(all(diff(tvT(1:50)) == 1), ...
+    'evenly sampled points should be one time step apart.');
+assert(diff(tvT([50 51])) == 51, ...
+    'the break in the time index column should survive as a real gap.');
+t_wafterT = circshift(tvT,-1,1) - 1 == tvT;
+assert(~t_wafterT(50), ...
+    'no temporal edge should be built across the break.');
+close(newFigsT)
+
+% a time index has to be usable as one: strictly increasing, and on a
+% regular grid so it can be expressed in whole steps
+TBadTidx = TTidx; TBadTidx.t(30) = TBadTidx.t(29) - 1; % goes backwards
+appTidx.loadData(TBadTidx);
+appTidx.VariableListBox.Value = 1:3;
+appTidx.TimeIndexDropDown.Value = find(strcmp(appTidx.TimeIndexDropDown.String, 't'));
+assertThrows(@() appTidx.buildNetwork(), 'TemporalMapperApp:invalidTimeIndex', ...
+    'a non-increasing time index should be rejected.');
+
+TIrregTidx = TTidx; TIrregTidx.t = cumsum([1; repmat(1.5,49,1); 2.5; repmat(1.5,49,1)]);
+appTidx.loadData(TIrregTidx);
+appTidx.VariableListBox.Value = 1:3;
+appTidx.TimeIndexDropDown.Value = find(strcmp(appTidx.TimeIndexDropDown.String, 't'));
+assertThrows(@() appTidx.buildNetwork(), 'TemporalMapperApp:invalidTimeIndex', ...
+    'an irregular time index (steps not whole multiples of the smallest) should be rejected.');
+delete(appTidx);
 
 % -- categorical colouring: text labels (condition, trial, behavioural
 % state) are a legitimate way to colour the network, but they are purely

@@ -44,6 +44,7 @@ finishes.
 - **Variables** — the numeric columns to build the network from (⌘/Ctrl/Shift-click for multiple; **Select All** as a shortcut). A leading unnamed row-index column is dropped automatically — see [below](#missing-data-and-downsampling).
 - **z-score variables** — on by default; see the Quickstart's [note on why](quickstart.md#step-1-load-and-select-the-data).
 - **start row / end row** — restrict the build to a sub-range of the loaded data. `end row = Inf` means "the last row."
+- **time index** — which column says who is temporally adjacent. Defaults to row order; pick a column for data with real breaks (separate sessions/trials). See [below](#missing-data-and-downsampling).
 - **downsample (N)** — keep every Nth row. A moving-average lowpass is applied first so this doesn't alias high-frequency content into spurious low-frequency structure — see [below](#missing-data-and-downsampling).
 - **embed lag / embed order** — optional [delay embedding](quickstart.md#step-2-optional-delay-embedding); order `1` (default) skips it.
 
@@ -140,6 +141,18 @@ here:
     after missing-data removal. Striding the survivors would slide every
     later sample off the true time grid, inventing gaps between samples that
     were in fact evenly spaced.
+
+!!! note "Supplying your own time index"
+    By default `tidx` comes from row position, which is right for a single
+    continuous recording. For data with genuine breaks — separate sessions
+    or trials — pick a **time index** column instead, and the breaks survive
+    as breaks rather than being bridged.
+
+    The unit is the *smallest* step between kept samples, so any larger step
+    is a real gap. The column must be strictly increasing and on a regular
+    grid (every step a whole multiple of the smallest); a genuinely irregular
+    index has no integer grid to sit on and is refused rather than silently
+    distorted. Numeric and datetime columns both work.
 
 !!! note "Real gaps stay gaps in time"
     `tknndigraph`'s `tidx` argument is what tells the pipeline which samples
