@@ -26,8 +26,10 @@ app.loadData(T);
 assert(isequal(app.VariableListBox.String(:), {'x';'y';'z'}), ...
     'loadData should populate VariableListBox with only numeric columns.');
 assert(isequal(app.VariableListBox.Value, 1:3), 'loadData should select all variables by default.');
-assert(isequal(app.ColorVarDropDown.String(:), {'(row index)';'x';'y';'z'}), ...
-    'loadData should populate ColorVarDropDown with (row index) + numeric columns.');
+assert(isequal(app.ColorVarDropDown.String(:), {'(row index)';'x';'y';'z';'label'}), ...
+    'loadData should offer (row index) + numeric columns + categorical columns for colouring.');
+assert(isequal(app.TimeVarDropDown.String(:), {'(row index)';'x';'y';'z'}), ...
+    'a categorical column must NOT be offered as a time axis -- it has no order.');
 assert(app.ColorVarDropDown.Value == 1, 'loadData should default ColorVarDropDown to (row index).');
 
 Tnonnumeric = table({'a';'b'}, 'VariableNames', {'label'});
@@ -84,7 +86,7 @@ assertThrows(@() app.addColorVarFromWorkspace('badvec', ones(N_rows-1,1)), ...
     'addColorVarFromWorkspace should reject a vector of the wrong length.');
 
 app.loadData(T); % reloading should reset workspace-sourced color options
-assert(isequal(app.ColorVarDropDown.String(:), {'(row index)';'x';'y';'z'}), ...
+assert(isequal(app.ColorVarDropDown.String(:), {'(row index)';'x';'y';'z';'label'}), ...
     'reloading data should clear workspace-sourced color options.');
 app.VariableListBox.Value = 1:3;
 app.KEditField.String = '3';
@@ -672,6 +674,70 @@ assert(~any(strcmp(dat.Properties.VariableNames, 'Var1')), ...
     'generated code should drop the row-index column as the app did.');
 close(newFigsI)
 delete(appIdx);
+
+% -- categorical colouring: text labels (condition, trial, behavioural
+% state) are a legitimate way to colour the network, but they are purely
+% nominal -- averaging their codes is meaningless, and a continuous ramp
+% implies an ordering between categories that does not exist.
+TCat = table();
+TCat.cond = repmat({'rest';'task';'recovery';'task'}, 40, 1);
+TCat.x = sin((1:160)'/10);
+TCat.y = cos((1:160)'/10);
+TCat.z = (1:160)';
+
+appCat = TemporalMapperApp;
+appCat.loadData(TCat);
+assert(any(strcmp(appCat.ColorVarDropDown.String, 'cond')), ...
+    'a categorical column should be selectable for colouring.');
+assert(~any(strcmp(appCat.TimeVarDropDown.String, 'cond')), ...
+    'a categorical column must not be offered as a time axis -- it has no order.');
+assert(~any(strcmp(appCat.VariableListBox.String, 'cond')), ...
+    'a categorical column must not be offered as a build variable.');
+
+appCat.VariableListBox.Value = 1:3;
+appCat.KEditField.String = '3';
+appCat.DEditField.String = '2';
+appCat.TExcludeEditField.String = '5';
+appCat.ColorVarDropDown.Value = find(strcmp(appCat.ColorVarDropDown.String, 'cond'));
+appCat.buildNetwork();
+assert(contains(appCat.StatusTextArea.String{1}, 'Built network:'), ...
+    'building with a categorical colour variable should succeed.');
+
+% the colour axis is pinned so each category owns a band, rather than
+% being stretched to whatever codes happen to be present
+assert(isequal(appCat.NetworkAxes.CLim, [0.5 3.5]), ...
+    'the colour axis should be pinned to the 3 categories (0.5 to 3.5).');
+
+% averaging category codes is meaningless, so those options go away
+assert(isequal(appCat.LabelMethodDropDown.String(:)', {'mode','none'}), ...
+    'mean/median should be withdrawn while colouring by a category.');
+% ...and come back for a numeric colour variable
+appCat.ColorVarDropDown.Value = find(strcmp(appCat.ColorVarDropDown.String, 'x'));
+appCat.ColorVarDropDown.Callback(appCat.ColorVarDropDown, []);
+assert(isequal(appCat.LabelMethodDropDown.String(:)', {'mode','mean','median','none'}), ...
+    'the full set of label methods should return for a numeric colour variable.');
+
+% a mean/median selection must survive the round trip rather than being
+% silently reinterpreted as a different method
+appCat.LabelMethodDropDown.Value = find(strcmp(appCat.LabelMethodDropDown.String,'median'));
+appCat.ColorVarDropDown.Value = find(strcmp(appCat.ColorVarDropDown.String, 'cond'));
+appCat.ColorVarDropDown.Callback(appCat.ColorVarDropDown, []);
+assert(strcmp(appCat.LabelMethodDropDown.String{appCat.LabelMethodDropDown.Value}, 'mode'), ...
+    'an withdrawn method should fall back to mode, not to whatever sits at the old index.');
+
+% and the generated script must reproduce the categorical colouring
+codeCat = appCat.generateCode();
+assert(contains(codeCat, 'findgroups'), ...
+    'generated code should convert the category labels to codes.');
+runnableCat = strrep(codeCat, placeholder, 'dat = TCat;');
+runnableCat = strrep(runnableCat, 'addpath("tmapper_tools/")', '');
+figsBeforeC = findobj('Type','figure');
+eval(runnableCat);
+newFigsC = setdiff(findobj('Type','figure'), figsBeforeC);
+assert(isnumeric(colorvar) && all(ismember(unique(colorvar), 1:3)), ...
+    'generated code should yield integer category codes.');
+close(newFigsC)
+delete(appCat);
 
 % -- export: the analysis-ready artifacts. "Copy Code" alone leaves the
 % user to re-run everything just to get at the node assignments, which is

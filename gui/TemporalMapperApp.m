@@ -100,6 +100,7 @@ classdef TemporalMapperApp < handle
         DataTable = table()   % the loaded data
         NumericVarNames = {}  % candidate columns (numeric only)
         DatetimeVarNames = {} % datetime columns: colour/time axis only, never build variables
+        CategoricalVarNames = {} % text/categorical columns: colouring only -- nominal, so no time axis
         DroppedIndexCol = false % whether loadData stripped a leading row-index column
         ExtraColorVarNames = {}  % display names of workspace-sourced color vectors
         ExtraColorVarValues = {} % their values, parallel to ExtraColorVarNames
@@ -174,10 +175,17 @@ classdef TemporalMapperApp < handle
             % hide the very column tmapper_demo.m uses as its time axis.
             isdt = varfun(@isdatetime, T, 'OutputFormat','uniform');
             dateNames = T.Properties.VariableNames(isdt);
+            % -- text/categorical columns (condition, trial, behavioural
+            % state) can colour the network, but they are purely nominal:
+            % no time axis, and no build variables either.
+            iscat = varfun(@(c) iscellstr(c) || isstring(c) || iscategorical(c), ...
+                T, 'OutputFormat','uniform');
+            catNames = T.Properties.VariableNames(iscat);
 
             app.DataTable = T;
             app.NumericVarNames = varNames;
             app.DatetimeVarNames = dateNames;
+            app.CategoricalVarNames = catNames;
             app.DroppedIndexCol = droppedIndexCol;
             % any workspace-sourced color vectors were aligned to the
             % previous data's row count, so they no longer apply
@@ -190,7 +198,7 @@ classdef TemporalMapperApp < handle
             app.LastTidx = [];
             app.VariableListBox.String = varNames;
             app.VariableListBox.Value = 1:numel(varNames); % select all by default
-            app.ColorVarDropDown.String = [{'(row index)'}, varNames, dateNames];
+            app.ColorVarDropDown.String = [{'(row index)'}, varNames, dateNames, catNames];
             app.ColorVarDropDown.Value = 1;
             app.TimeVarDropDown.String = [{'(row index)'}, varNames, dateNames];
             app.TimeVarDropDown.Value = 1;
@@ -229,7 +237,7 @@ classdef TemporalMapperApp < handle
                 app.ExtraColorVarNames{end+1} = displayName;
                 app.ExtraColorVarValues{end+1} = v;
             end
-            app.ColorVarDropDown.String = [{'(row index)'}, app.NumericVarNames, app.DatetimeVarNames, app.ExtraColorVarNames];
+            app.ColorVarDropDown.String = [{'(row index)'}, app.NumericVarNames, app.DatetimeVarNames, app.CategoricalVarNames, app.ExtraColorVarNames];
             app.ColorVarDropDown.Value = numel(app.ColorVarDropDown.String); % select the one just added
         end
 
@@ -467,6 +475,7 @@ classdef TemporalMapperApp < handle
             % -- color variable (a DataTable column, a workspace-sourced
             % vector picked via ColorVarWorkspaceButton, or row index)
             selectedColor = app.ColorVarDropDown.String{app.ColorVarDropDown.Value};
+            nCats = 0; % >0 only for a categorical colour variable
             if strcmp(selectedColor, '(row index)')
                 colorvar = tidx;
                 colorlabel = 'row index';
@@ -478,6 +487,13 @@ classdef TemporalMapperApp < handle
                 % datetime, and a colormap needs numbers regardless --
                 % datenum keeps the ordering and spacing intact.
                 colorvar = datenum(app.DataTable.(selectedColor)(rows)); %#ok<DATNM>
+                colorlabel = selectedColor;
+            elseif ismember(selectedColor, app.CategoricalVarNames)
+                % nominal labels -> 1..nCategories. The codes are
+                % arbitrary identifiers, not quantities.
+                [colorvar, catNames] = findgroups(app.DataTable.(selectedColor)(rows));
+                colorvar = double(colorvar);
+                nCats = numel(catNames);
                 colorlabel = selectedColor;
             else
                 extraIdx = strcmp(app.ExtraColorVarNames, selectedColor);
@@ -520,9 +536,20 @@ classdef TemporalMapperApp < handle
 
             stepTimer = tic;
             nodeSizeMode = app.NodeSizeModeDropDown.String{app.NodeSizeModeDropDown.Value};
+            app.syncLabelMethodOptions(nCats > 0);
             labelMethod = app.LabelMethodDropDown.String{app.LabelMethodDropDown.Value};
             cmapName = app.ColormapDropDown.String{app.ColormapDropDown.Value};
+            % pin the colour axis so each category owns an equal band --
+            % otherwise the scale stretches to whichever codes happen to
+            % be present and the same category changes colour between
+            % builds.
+            if nCats > 0
+                nodeclim = [0.5, nCats + 0.5];
+            else
+                nodeclim = []; % plottmgraph's default: the data's own range
+            end
             plottmgraph(g_simp, colorvar, members, 'ax', app.NetworkAxes, ...
+                'nodeclim', nodeclim, ...
                 'nodesizemode', nodeSizeMode, ...
                 'labelmethod', labelMethod, ...
                 'colorlabel', colorlabel, ...
@@ -800,6 +827,15 @@ classdef TemporalMapperApp < handle
             elseif ismember(selectedColor, app.NumericVarNames)
                 L{end+1} = sprintf('colorvar = dat.%s(rows);', selectedColor);
                 colorlabelExpr = ['''' selectedColor ''''];
+            elseif ismember(selectedColor, app.CategoricalVarNames)
+                L{end+1} = '%% nominal category labels -> integer codes 1..nCategories. The codes are';
+                L{end+1} = '%% arbitrary identifiers, not quantities, so the colour axis is pinned so';
+                L{end+1} = '%% each category owns an equal band, and only ''mode''/''none'' make sense';
+                L{end+1} = '%% as label methods (averaging codes would name a different category).';
+                L{end+1} = sprintf('[colorvar, catNames] = findgroups(dat.%s(rows));', selectedColor);
+                L{end+1} = 'colorvar = double(colorvar);';
+                L{end+1} = 'nodeclim = [0.5, numel(catNames) + 0.5];';
+                colorlabelExpr = ['''' selectedColor ''''];
             elseif ismember(selectedColor, app.DatetimeVarNames)
                 L{end+1} = '%% plottmgraph calls isnan on colorvar, which errors on datetime, and';
                 L{end+1} = '%% a colormap needs numbers regardless -- datenum keeps the ordering';
@@ -813,6 +849,10 @@ classdef TemporalMapperApp < handle
                 L{end+1} = sprintf('colorvar = %s(rows); %% <-- replace %s with your workspace variable', ...
                     matlab.lang.makeValidName(selectedColor), matlab.lang.makeValidName(selectedColor));
                 colorlabelExpr = ['''' selectedColor ''''];
+            end
+
+            if ~ismember(selectedColor, app.CategoricalVarNames)
+                L{end+1} = 'nodeclim = []; %% plottmgraph default: the data''s own range';
             end
 
             selectedTime = app.TimeVarDropDown.String{app.TimeVarDropDown.Value};
@@ -835,7 +875,7 @@ classdef TemporalMapperApp < handle
                 % scatter overlay handle (empty unless nodescatter=1).
                 L{end+1} = sprintf(['[h1, h2, cb, cb_, hg, D_geo, hs] = plotgraphtcm(g_simp, colorvar, t, members, ' ...
                     '''nodesizemode'', ''%s'', ''labelmethod'', ''%s'', ''colorlabel'', %s, ' ...
-                    '''cmap'', ''%s'', ''nodescatter'', %d);'], nodeSizeMode, labelMethod, colorlabelExpr, cmapName, nodescatter);
+                    '''cmap'', ''%s'', ''nodeclim'', nodeclim, ''nodescatter'', %d);'], nodeSizeMode, labelMethod, colorlabelExpr, cmapName, nodescatter);
             else
                 % plottmgraph plots into gca by default, reusing an
                 % existing figure if one is open -- open a new one first
@@ -846,7 +886,7 @@ classdef TemporalMapperApp < handle
                 L{end+1} = 'figure;';
                 L{end+1} = sprintf(['[h1, cb, hg, hs] = plottmgraph(g_simp, colorvar, members, ' ...
                     '''nodesizemode'', ''%s'', ''labelmethod'', ''%s'', ''colorlabel'', %s, ' ...
-                    '''cmap'', ''%s'', ''nodescatter'', %d);'], nodeSizeMode, labelMethod, colorlabelExpr, cmapName, nodescatter);
+                    '''cmap'', ''%s'', ''nodeclim'', nodeclim, ''nodescatter'', %d);'], nodeSizeMode, labelMethod, colorlabelExpr, cmapName, nodescatter);
             end
             % axis('equal') alone (set inside plottmgraph) can leave wide
             % blank margins when the axes box isn't perfectly square;
@@ -874,6 +914,32 @@ classdef TemporalMapperApp < handle
     end
 
     methods (Access = private)
+
+        function syncLabelMethodOptions(app, isCategorical)
+            %SYNCLABELMETHODOPTIONS offer only the label methods that mean
+            %something for the current colour variable.
+            %   Category codes are arbitrary identifiers, so averaging
+            %   them is nonsense -- the mean of codes 1 and 3 is code 2,
+            %   a different category entirely. mean/median are therefore
+            %   withdrawn while a category is selected, and restored
+            %   afterwards. The current choice is matched by NAME, since
+            %   the same index means a different method in a shorter list.
+            if isCategorical
+                allowed = {'mode','none'};
+            else
+                allowed = {'mode','mean','median','none'};
+            end
+            if isequal(app.LabelMethodDropDown.String(:)', allowed)
+                return
+            end
+            current = app.LabelMethodDropDown.String{app.LabelMethodDropDown.Value};
+            idx = find(strcmp(allowed, current), 1);
+            if isempty(idx)
+                idx = 1; % a withdrawn method falls back to mode
+            end
+            app.LabelMethodDropDown.String = allowed;
+            app.LabelMethodDropDown.Value = idx;
+        end
 
         function v = columnValues(app, name, rows)
             %COLUMNVALUES the values of a selectable colour/time source at

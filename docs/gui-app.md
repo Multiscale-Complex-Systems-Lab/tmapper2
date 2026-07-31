@@ -61,6 +61,18 @@ the recurrence plot / a node-border scatter overlay. Changing any of these
 **re-renders the existing network instead of rebuilding it** — cheap, and
 safe to click through freely once a build has completed.
 
+!!! note "Colouring by a category"
+    Text columns (condition, trial, behavioural state) are offered under
+    **Color by**. They are treated as purely **nominal**: labels map to
+    integer codes, the colour axis is pinned so each category owns an equal
+    band (so a category keeps its colour between builds), and `mean`/`median`
+    are withdrawn from **Label method** — averaging codes 1 and 3 gives
+    code 2, which is a *different category*, not an average of two. Pair them
+    with a qualitative colormap.
+
+    They stay out of **Variables** and **Time axis**: distances and a time
+    axis both need an order that nominal labels do not have.
+
 !!! note "Colormap"
     `jet` by default, matching `plottmgraph`'s own default. `lines`,
     `prism` and `colorcube` are **qualitative** — adjacent entries are
