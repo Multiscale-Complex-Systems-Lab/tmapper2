@@ -632,6 +632,92 @@ assert(~any(strcmp(dat.Properties.VariableNames, 'Var1')), ...
 close(newFigsI)
 delete(appIdx);
 
+% -- export: the analysis-ready artifacts. "Copy Code" alone leaves the
+% user to re-run everything just to get at the node assignments, which is
+% what downstream dwell-time/transition-rate analysis actually needs.
+% NOTE the ramp column: without it this data collapses to a single node,
+% which silently makes every assertion about the time-point -> node
+% mapping below vacuously true (caught by mutation testing).
+TExp = table();
+TExp.Date = (datetime(2020,1,1) + days(0:149))';
+TExp.x = sin((1:150)'/10);
+TExp.y = cos((1:150)'/10);
+TExp.z = (1:150)';
+
+appExp = TemporalMapperApp;
+assertThrows(@() appExp.exportResults(tempdir), 'TemporalMapperApp:noNetwork', ...
+    'exportResults should refuse to export before a network has been built.');
+appExp.loadData(TExp); % has a Date column, to exercise the datetime paths
+appExp.VariableListBox.Value = 1:3;
+appExp.KEditField.String = '3';
+appExp.DEditField.String = '2';
+appExp.TExcludeEditField.String = '5';
+appExp.TimeVarDropDown.Value = find(strcmp(appExp.TimeVarDropDown.String, 'Date'));
+appExp.buildNetwork();
+% read the build summary BEFORE exporting -- exportResults replaces the
+% status text with its own confirmation
+tokExp = regexp(appExp.StatusTextArea.String{1}, 'Built network: (\d+) nodes', 'tokens');
+expNodes = str2double(tokExp{1}{1});
+
+outDir = fullfile(tempdir, sprintf('tmapper_export_test_%d', randi(1e9)));
+cleanupExport = onCleanup(@() rmdir(outDir, 's')); %#ok<NASGU>
+appExp.exportResults(outDir);
+
+for f = {'network.png','recurrence.png','timeline.csv','params.json','reproduce.m'}
+    assert(isfile(fullfile(outDir, f{1})), sprintf('export should write %s.', f{1}));
+end
+
+% timeline.csv is the join-back table: which attractor the system was in
+% at each retained time point
+TL = readtable(fullfile(outDir,'timeline.csv'));
+assert(all(ismember({'tidx','source_row','node'}, TL.Properties.VariableNames)), ...
+    'timeline.csv should carry tidx, source_row and node columns.');
+assert(expNodes > 1, ...
+    'this fixture must produce a multi-node network, or the mapping checks below prove nothing.');
+assert(all(TL.node >= 1 & TL.node <= expNodes), ...
+    'every timeline node id should be a real node of the built network.');
+assert(isequal(unique(TL.node(:))', 1:expNodes), ...
+    'every node of the network should appear in the timeline.');
+% the mapping must be the real members{} grouping, not a constant or a
+% renumbering. Cross-checked against an independent rerun of the exported
+% reproduce.m, so the timeline is verified against the pipeline itself
+% rather than against the same code that wrote it.
+runnableExp = strrep(fileread(fullfile(outDir,'reproduce.m')), placeholder, 'dat = TExp;');
+runnableExp = strrep(runnableExp, 'addpath("tmapper_tools/")', '');
+figsBeforeE = findobj('Type','figure');
+eval(runnableExp);
+newFigsE = setdiff(findobj('Type','figure'), figsBeforeE);
+for i = 1:expNodes
+    assert(isequal(sort(find(TL.node == i))', sort(members{i}(:))'), ...
+        sprintf('timeline rows for node %d should be exactly that node''s members.', i));
+end
+close(newFigsE)
+assert(height(TL) == numel(TL.tidx) && issorted(TL.tidx), ...
+    'timeline.csv should be one row per retained time point, in time order.');
+
+% params.json records what was actually built, including resolved values
+P = jsondecode(fileread(fullfile(outDir,'params.json')));
+assert(P.network_parameters.k == 3 && P.network_parameters.d == 2, ...
+    'params.json should record the network parameters used.');
+assert(isfield(P.network_parameters,'max_neighbor_dist_resolved'), ...
+    'params.json should record the RESOLVED max neighbor distance, not just the request.');
+assert(P.result.n_nodes == expNodes, 'params.json should record the resulting network size.');
+
+% reproduce.m is the same script Copy Code produces
+assert(strcmp(strtrim(fileread(fullfile(outDir,'reproduce.m'))), strtrim(appExp.generateCode())), ...
+    'reproduce.m should be exactly the script generateCode produces.');
+
+% exporting without the recurrence plot shown should skip that figure
+appExp.ShowRecurrenceCheckBox.Value = 0;
+appExp.buildNetwork();
+outDir2 = fullfile(tempdir, sprintf('tmapper_export_test2_%d', randi(1e9)));
+cleanupExport2 = onCleanup(@() rmdir(outDir2, 's')); %#ok<NASGU>
+appExp.exportResults(outDir2);
+assert(isfile(fullfile(outDir2,'network.png')), 'the network figure should always be exported.');
+assert(~isfile(fullfile(outDir2,'recurrence.png')), ...
+    'the recurrence figure should not be exported when it is not shown.');
+delete(appExp);
+
 delete(app);
 close all
 

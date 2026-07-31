@@ -35,8 +35,9 @@ matrix already sitting in your base workspace. Only numeric columns are
 offered as build variables. This panel also holds **Build Network**, **Stop**
 (cancels an in-progress build — see [below](#stop-cancels-between-not-mid-stage)),
 **Reset** (restores every parameter to its default, but leaves your loaded
-data and variable selection alone), **Copy Code**, and a live **Status** box
-with per-step timing once a build finishes.
+data and variable selection alone), **Copy Code**, **Export...** (see
+[below](#export)), and a live **Status** box with per-step timing once a build
+finishes.
 
 ### Variables & Preprocessing
 
@@ -129,6 +130,32 @@ only takes effect at the boundary between stages (distances → k-NN graph →
 simplify) — not mid-computation within one. For a very slow single stage
 (usually the distance/k-NN step on a large dataset), it may take a moment to
 actually stop.
+
+## Export
+
+**Export...** asks for a folder and writes everything needed to carry the
+result into downstream analysis or a paper:
+
+| File | What it is |
+| --- | --- |
+| `network.png` | the attractor transition network, at 200 dpi |
+| `recurrence.png` | the geodesic recurrence plot (only when it is shown) |
+| `timeline.csv` | one row per retained time point: `tidx`, `source_row`, `node`, plus the chosen colour/time columns |
+| `params.json` | full provenance — every preprocessing and network setting, the *resolved* `maxNeighborDist`, and the resulting network's size |
+| `reproduce.m` | the same standalone script **Copy Code** puts on the clipboard |
+
+`timeline.csv` is the one that matters most: it is the join-back table saying
+**which attractor the system was in at each time point**, which is what
+dwell-time, transition-rate and occupancy analyses actually need — and the
+one thing that cannot be recovered from the figures.
+
+The figures are written from the axes rather than the window, so you get just
+the plot, not a screenshot of the whole GUI.
+
+!!! note "params.json records the build, not the controls"
+    Every value in it comes from the build that produced these figures, so
+    changing a field after building and then exporting still describes what
+    you are actually looking at.
 
 ## Copy Code
 

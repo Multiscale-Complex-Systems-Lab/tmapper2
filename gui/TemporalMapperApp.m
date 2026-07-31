@@ -86,6 +86,7 @@ classdef TemporalMapperApp < handle
         StopButton              matlab.ui.control.UIControl
         ResetButton             matlab.ui.control.UIControl
         CopyCodeButton          matlab.ui.control.UIControl
+        ExportButton            matlab.ui.control.UIControl
         StatusLabel             matlab.ui.control.UIControl
         StatusTextArea          matlab.ui.control.UIControl
 
@@ -117,6 +118,16 @@ classdef TemporalMapperApp < handle
         LastOrder = []
         LastLag = []
         LastDownsample = []
+        % the remaining build inputs, cached for the same reason: an
+        % export must describe the network that was actually built, not
+        % whatever the controls happen to read after the fact.
+        LastSelectedVars = {}
+        LastZscore = []
+        LastStartRow = []
+        LastEndRow = []
+        LastMaxDistPrct = []
+        LastMaxDistRequested = []
+        LastReciprocal = []
 
         CancelRequested = false % set by StopButtonPushed, checked between build stages
     end
@@ -395,6 +406,13 @@ classdef TemporalMapperApp < handle
             app.LastOrder = order;
             app.LastLag = lag;
             app.LastDownsample = downsample;
+            app.LastSelectedVars = selectedVars;
+            app.LastZscore = app.ZscoreCheckBox.Value;
+            app.LastStartRow = startRow;
+            app.LastEndRow = endRow;
+            app.LastMaxDistPrct = maxdistprct;
+            app.LastMaxDistRequested = maxdist;
+            app.LastReciprocal = recip;
 
             [tPlotNetwork, tPlotRecurrence, showRecurrence] = app.renderPlot();
 
@@ -542,6 +560,115 @@ classdef TemporalMapperApp < handle
             app.StatusTextArea.String = {sprintf( ...
                 'Re-rendered plot (network unchanged): %d nodes, %d edges.', ...
                 numnodes(g_simp), numedges(g_simp))};
+        end
+
+        function exportResults(app, outDir)
+            %EXPORTRESULTS write the built network's analysis-ready
+            %artifacts into outDir: both figures, a per-time-point
+            %timeline, a provenance record, and the reproduction script.
+            %Used by the "Export..." button (after picking a folder) and
+            %directly by scripts/tests.
+            %   The timeline is the point of this: it is the join-back
+            %   table saying WHICH ATTRACTOR the system was in at each
+            %   time point, which is what dwell-time, transition-rate and
+            %   occupancy analyses actually need, and the one thing that
+            %   cannot be recovered from the figures.
+            if isempty(app.LastMembers)
+                error('TemporalMapperApp:noNetwork','Build a network first.');
+            end
+            if ~exist(outDir,'dir')
+                mkdir(outDir);
+            end
+
+            g_simp = app.LastGSimp;
+            members = app.LastMembers;
+            rows = app.LastRows(:);
+            tidx = app.LastTidx(:);
+
+            % -- figures. exportgraphics on the axes rather than the
+            % figure: the app's axes live inside a panel alongside all the
+            % controls, so saving the figure would capture the whole GUI.
+            exportgraphics(app.NetworkAxes, fullfile(outDir,'network.png'), 'Resolution',200);
+            if app.ShowRecurrenceCheckBox.Value
+                exportgraphics(app.RecurrenceAxes, fullfile(outDir,'recurrence.png'), 'Resolution',200);
+            end
+
+            % -- timeline: one row per retained time point. members holds
+            % positional indices into the original graph's nodes (i.e.
+            % into tidx/rows), since g came straight from tknndigraph.
+            node = zeros(numel(tidx),1);
+            for i = 1:numel(members)
+                node(members{i}) = i;
+            end
+            TL = table(tidx, rows, node, 'VariableNames', {'tidx','source_row','node'});
+            % carry the chosen colour/time columns through too, so the
+            % table can be plotted or grouped without re-reading the source
+            selectedColor = app.ColorVarDropDown.String{app.ColorVarDropDown.Value};
+            if ~strcmp(selectedColor,'(row index)')
+                TL.(matlab.lang.makeValidName(selectedColor)) = app.columnValues(selectedColor, rows);
+            end
+            selectedTime = app.TimeVarDropDown.String{app.TimeVarDropDown.Value};
+            if ~strcmp(selectedTime,'(row index)') && ~strcmp(selectedTime, selectedColor)
+                TL.(matlab.lang.makeValidName(selectedTime)) = app.columnValues(selectedTime, rows);
+            end
+            writetable(TL, fullfile(outDir,'timeline.csv'));
+
+            % -- provenance. Everything here comes from the cached BUILD
+            % inputs, not from the live controls, so the record describes
+            % the network that actually produced these figures.
+            P = struct();
+            P.tool = 'Temporal Mapper 2 (MATLAB GUI)';
+            P.exported = char(datetime('now','Format','yyyy-MM-dd HH:mm:ss'));
+
+            src = struct();
+            src.data_source_code = app.DataSourceCode;
+            src.dropped_index_column = app.DroppedIndexCol;
+            src.n_rows_loaded = height(app.DataTable);
+            P.source = src;
+
+            pre = struct();
+            pre.variables = app.LastSelectedVars;
+            pre.zscore = logical(app.LastZscore);
+            pre.start_row = app.LastStartRow;
+            pre.end_row = app.LastEndRow;
+            pre.downsample = app.LastDownsample;
+            pre.embed_lag = app.LastLag;
+            pre.embed_order = app.LastOrder;
+            P.preprocessing = pre;
+
+            np = struct();
+            np.k = app.LastK;
+            np.d = app.LastD;
+            np.texclude = app.LastTExclude;
+            np.max_neighbor_dist_prct = app.LastMaxDistPrct;
+            np.max_neighbor_dist_requested = app.LastMaxDistRequested;
+            % the percentile and absolute cutoffs are combined internally
+            % (the stricter wins), so record what was actually applied
+            np.max_neighbor_dist_resolved = app.LastPar.maxNeighborDist;
+            np.reciprocal = logical(app.LastReciprocal);
+            P.network_parameters = np;
+
+            po = struct();
+            po.color_by = selectedColor;
+            po.time_axis = selectedTime;
+            po.node_size_mode = app.NodeSizeModeDropDown.String{app.NodeSizeModeDropDown.Value};
+            po.label_method = app.LabelMethodDropDown.String{app.LabelMethodDropDown.Value};
+            po.show_recurrence = logical(app.ShowRecurrenceCheckBox.Value);
+            po.show_node_border = logical(app.ShowNodeBorderCheckBox.Value);
+            P.plot_options = po;
+
+            res = struct();
+            res.n_nodes = numnodes(g_simp);
+            res.n_edges = numedges(g_simp);
+            res.n_time_points = numel(tidx);
+            P.result = res;
+
+            app.writeTextFile(fullfile(outDir,'params.json'), jsonencode(P,'PrettyPrint',true));
+            app.writeTextFile(fullfile(outDir,'reproduce.m'), app.generateCode());
+
+            app.StatusTextArea.String = { ...
+                sprintf('Exported to %s', outDir), ...
+                'network.png, timeline.csv (time point -> node), params.json, reproduce.m'};
         end
 
         function code = generateCode(app)
@@ -735,6 +862,45 @@ classdef TemporalMapperApp < handle
     end
 
     methods (Access = private)
+
+        function v = columnValues(app, name, rows)
+            %COLUMNVALUES the values of a selectable colour/time source at
+            %the given rows, whether it is a table column or one of the
+            %workspace-sourced vectors. Kept in its own method because
+            %exportResults and renderPlot must agree on what a given
+            %dropdown entry means.
+            if ismember(name, app.ExtraColorVarNames)
+                fullvec = app.ExtraColorVarValues{strcmp(app.ExtraColorVarNames, name)};
+                v = fullvec(rows);
+            else
+                v = app.DataTable.(name)(rows);
+            end
+        end
+
+        function writeTextFile(~, path, text)
+            fid = fopen(path, 'w');
+            if fid < 0
+                error('TemporalMapperApp:exportFailed','Could not write %s.', path);
+            end
+            closeFile = onCleanup(@() fclose(fid)); %#ok<NASGU>
+            fwrite(fid, text);
+        end
+
+        function ExportButtonPushed(app, ~, ~)
+            if isempty(app.LastMembers)
+                errordlg('Build a network first.', 'Export error');
+                return
+            end
+            outDir = uigetdir(pwd, 'Choose a folder to export into');
+            if isequal(outDir, 0)
+                return
+            end
+            try
+                app.exportResults(outDir);
+            catch ME
+                errordlg(ME.message, 'Export error');
+            end
+        end
 
         function val = parseNumericField(~, ctrl, label, minVal, maxVal, mustBeInt, minExclusive)
             %PARSENUMERICFIELD parse+validate a classic edit field's
@@ -1011,7 +1177,7 @@ classdef TemporalMapperApp < handle
                 'Units','normalized', 'Position',[0 0 1 1-setupH]);
 
             % ================= panel 1: data, build & status =================
-            nRows = 7;
+            nRows = 8;
             app.LoadDataButton = uicontrol(app.DataPanel, 'Style','pushbutton', ...
                 'String','Load Data...', 'Units','normalized', ...
                 'Position', app.rowPosition(1,nRows,1,2), ...
@@ -1052,14 +1218,20 @@ classdef TemporalMapperApp < handle
                 'Units','normalized', 'Position', app.rowPosition(4,nRows,2,2), ...
                 'Callback', @(src,evt) app.CopyCodeButtonPushed(src,evt));
 
+            app.ExportButton = uicontrol(app.DataPanel, 'Style','pushbutton', ...
+                'String','Export...', ...
+                'TooltipString','Save both figures, timeline.csv (which node the system was in at each time point), params.json and reproduce.m into a folder.', ...
+                'Units','normalized', 'Position', app.rowPosition(5,nRows,1,1), ...
+                'Callback', @(src,evt) app.ExportButtonPushed(src,evt));
+
             app.StatusLabel = uicontrol(app.DataPanel, 'Style','text', ...
                 'String','Status:', 'HorizontalAlignment','left', ...
-                'Units','normalized', 'Position', app.rowPosition(5,nRows,1,1));
+                'Units','normalized', 'Position', app.rowPosition(6,nRows,1,1));
 
             app.StatusTextArea = uicontrol(app.DataPanel, 'Style','edit', ...
                 'String',{'Load a data file to get started.'}, 'Max',2, 'Min',0, ...
                 'Enable','inactive', 'HorizontalAlignment','left', ...
-                'Units','normalized', 'Position', app.rowPosition(6,nRows,1,1,2));
+                'Units','normalized', 'Position', app.rowPosition(7,nRows,1,1,2));
 
             % ================= panel 2: variables & preprocessing =================
             nRows = 10;
