@@ -6,7 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Temporal Mapper 2 (`tmapper`), developed by Mengsen Zhang, is a MATLAB toolbox that builds a Mapper-algorithm-style **attractor transition network** from time-series data. Each node in the resulting graph represents an attractor/stable state (node size = local stability), and each edge represents an observed transition between states. It generalizes the original fMRI-specific Temporal Mapper (https://github.com/Multiscale-Complex-Systems-Lab/tmapper/) to arbitrary time-series data.
 
-This is a pure MATLAB codebase with **no build system, package manager, linter, test suite, or CI** — none of that tooling exists in this repo. Don't invent commands for build/lint/test; there aren't any to run.
+This is a pure MATLAB codebase with **no build system, package manager, or linter** — don't invent commands for those; there aren't any to run.
+
+There *are* tests and CI, though:
+
+- `tests/test_*.m` — plain, dependency-free scripts (not `matlab.unittest` classes). Each prints `All tests passed.` and errors out via `assert()` on the first failing check. Run one with `matlab -batch "run('tests/test_core_pipeline.m')"`, or open and run it in the GUI.
+- `.github/workflows/tests.yml` — runs every `tests/test_*.m` on each push to `main` and each PR, via MathWorks' `matlab-actions` (free MATLAB license for public repos), requesting the Statistics and Machine Learning Toolbox explicitly since the base CI install lacks it. New test files are picked up automatically by the `test_*.m` glob; no workflow change needed.
+- `.github/workflows/docs.yml` — builds and deploys the MkDocs site.
+
+CI runs headless on Linux (`-batch` implies `-nodisplay`), so GUI tests must not depend on a visible display.
 
 ## Running the code
 
