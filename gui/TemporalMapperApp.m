@@ -325,7 +325,7 @@ classdef TemporalMapperApp < handle
             end
 
             % -- refuse an oversized range BEFORE pdist2 allocates it
-            oversized = TemporalMapperApp.oversizedWindowMessage(numel(baseRows));
+            oversized = TemporalMapperApp.oversizedWindowMessage(numel(baseRows), app.ShowRecurrenceCheckBox.Value);
             if ~isempty(oversized)
                 error('TemporalMapperApp:windowTooLarge', '%s', oversized);
             end
@@ -416,7 +416,12 @@ classdef TemporalMapperApp < handle
             drawnow
             if app.CancelRequested, app.reportCancelled(); return; end
             stepTimer = tic;
-            [g_simp, members, ~, ~] = filtergraph(g, d, 'reciprocal', recip);
+            % Only two outputs, deliberately: MATLAB counts `~` placeholders
+            % in nargout, so asking for [g_simp, members, ~, ~] made
+            % nargout==4 and silently opted this call into filtergraph's
+            % dense route -- computing both distances() and simplifyDistance
+            % (~3 GB at 13000 points) purely to throw them away.
+            [g_simp, members] = filtergraph(g, d, 'reciprocal', recip);
             tSimplify = toc(stepTimer);
 
             if app.CancelRequested, app.reportCancelled(); return; end
@@ -1585,7 +1590,7 @@ classdef TemporalMapperApp < handle
                 'gray','hsv','lines','prism','colorcube'};
         end
 
-        function msg = oversizedWindowMessage(nPoints)
+        function msg = oversizedWindowMessage(nPoints, showRecurrence)
             %OVERSIZEDWINDOWMESSAGE the error text for a row range whose
             %full pairwise distance matrix would be unreasonably large,
             %or '' if it is fine.
@@ -1603,13 +1608,23 @@ classdef TemporalMapperApp < handle
             %   give without ever going dense.)
             %   Counted AFTER decimation, so raising downsample is a
             %   genuine fix rather than a way to sidestep the check.
-            %   Fitted to measured whole-GUI peaks (1.75 GB at 8000
-            %   points, 6.15 GB at 17320), which is what a user actually
-            %   pays: filtergraph's geodesic matrix AND, when the
-            %   recurrence plot is shown, TCMdistance's per-time-point
-            %   matrix, which is a second nPoints-by-nPoints array.
-            overheadGB = 0.6;      % roughly flat: the blocked distance pass
-            bytesPerSquare = 18.6; % the quadratic consumers above
+            %   Fitted to measured whole-app peaks, one fresh MATLAB per
+            %   size. With the graph build now blocked and filtergraph
+            %   thresholding by sparse reachability, the only thing left
+            %   that scales with nPoints^2 is the recurrence plot --
+            %   TCMdistance produces a genuine per-time-point matrix,
+            %   which is the feature rather than a defect. So the ceiling
+            %   depends on whether it is shown, and turning it off is a
+            %   real way to go bigger:
+            %     shown  : 3.94 GB at 20000 points  -> ~8.0 bytes/nPoints^2
+            %     hidden : 2.10 GB at 20000 points  -> ~3.3 bytes/nPoints^2
+            if nargin < 2, showRecurrence = true; end % conservative default
+            overheadGB = 0.8;      % roughly flat: the blocked distance pass
+            if showRecurrence
+                bytesPerSquare = 8.0;  % TCMdistance's per-time-point matrix
+            else
+                bytesPerSquare = 3.3;
+            end
             budgetGB = 4;          % the limit is a memory budget, not a magic count
             maxPoints = floor(sqrt(max(budgetGB-overheadGB,0)*1e9/bytesPerSquare));
             if nPoints > maxPoints
@@ -1618,6 +1633,10 @@ classdef TemporalMapperApp < handle
                     'about %d points). Restrict the row range (start row/end row) or ' ...
                     'increase downsample (N).'], ...
                     nPoints, overheadGB + bytesPerSquare*nPoints^2/1e9, budgetGB, maxPoints);
+                if showRecurrence
+                    msg = [msg ' Unchecking "Show recurrence plot" also helps: it is the ' ...
+                        'only part that still grows with the square of the number of points.'];
+                end
             else
                 msg = '';
             end

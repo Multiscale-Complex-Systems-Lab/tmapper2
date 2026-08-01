@@ -103,16 +103,24 @@ here:
     The count is taken *after* decimation, so raising **downsample (N)** is
     a real fix rather than a way around the check.
 
-    The limit is a **memory budget** (4 GB, ~13 500 points) rather than a
-    magic number, fitted to measured whole-app peaks — 1.75 GB at 8 000
-    points, 6.15 GB at 17 320.
+    The limit is a **memory budget** (4 GB) rather than a magic number,
+    fitted to measured whole-app peaks.
 
-    The graph build itself no longer sets that ceiling: it runs on
-    `tknndigraph`'s `lowMemory` path, which computes distances a block of
-    rows at a time and never allocates an N×N array, so its cost is roughly
-    *flat* in N. What still scales quadratically is `filtergraph`, whose
-    `distances()` returns a full N×N geodesic matrix, plus the recurrence
-    plot's per-time-point matrix when it is shown.
+    Neither the graph build nor the simplification sets that ceiling any
+    more. The build runs on `tknndigraph`'s `lowMemory` path, which
+    computes distances a block of rows at a time and never allocates an
+    N×N array; `filtergraph` thresholds geodesics by sparse reachability
+    rather than materialising them. Both are roughly *flat* in N.
+
+    What remains is the **recurrence plot**, which is genuinely an N×N
+    image of geodesic distances between time points — the feature itself,
+    not waste. So the ceiling depends on whether you are showing it, and
+    unchecking it is a real way to go bigger:
+
+    | Show recurrence plot | Peak at 20 000 points | Limit |
+    | --- | --- | --- |
+    | on | 3.94 GB | ~20 000 points |
+    | off | 2.10 GB | ~31 000 points |
 
 !!! note "A stray row-index column is dropped"
     Writing a CSV without suppressing the index leaves an unnamed first

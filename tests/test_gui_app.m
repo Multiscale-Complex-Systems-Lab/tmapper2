@@ -262,16 +262,26 @@ assert(isempty(TemporalMapperApp.oversizedWindowMessage(100)), ...
 bigMsg = TemporalMapperApp.oversizedWindowMessage(50000);
 assert(~isempty(bigMsg) && contains(bigMsg, 'GB'), ...
     'an oversized window should be refused with a memory estimate.');
-assert(contains(bigMsg, '47.1 GB'), ...
-    ['the estimate should be the measured whole-GUI peak (~18.6 bytes per N^2 plus a ' ...
+assert(contains(bigMsg, '20.8 GB'), ...
+    ['the estimate should be the measured whole-app peak (~8.0 bytes per N^2 plus a ' ...
      'flat term), not the size of any single matrix.']);
+
+% the recurrence plot is the only part still growing with N^2, so hiding it
+% genuinely raises the ceiling -- and the guard should say so
+smallerMsg = TemporalMapperApp.oversizedWindowMessage(50000, false);
+assert(~isempty(smallerMsg), 'a 50000-point range is oversized either way.');
+assert(contains(bigMsg, 'Show recurrence plot') && ~contains(smallerMsg, 'Show recurrence plot'), ...
+    'the recurrence-plot hint should appear only when it is actually shown.');
+assert(isempty(TemporalMapperApp.oversizedWindowMessage(25000, false)) && ...
+       ~isempty(TemporalMapperApp.oversizedWindowMessage(25000, true)), ...
+    '25000 points should be allowed without the recurrence plot but not with it.');
 
 % the guard counts points AFTER decimation, so downsampling is a real fix
 % rather than a way to sidestep the check
 appBigWin = TemporalMapperApp;
 TBigWin = table();
-TBigWin.x = sin((1:15000)'/50);
-TBigWin.y = cos((1:15000)'/50);
+TBigWin.x = sin((1:25000)'/50);
+TBigWin.y = cos((1:25000)'/50);
 appBigWin.loadData(TBigWin);
 appBigWin.VariableListBox.Value = 1:2;
 appBigWin.KEditField.String = '3';
@@ -280,7 +290,7 @@ appBigWin.TExcludeEditField.String = '5';
 assertThrows(@() appBigWin.buildNetwork(), 'TemporalMapperApp:windowTooLarge', ...
     'building on an oversized row range should be refused up front.');
 % ...and it must refuse BEFORE doing the expensive work, not after
-appBigWin.DownsampleEditField.String = '20'; % 15000 -> 750 points
+appBigWin.DownsampleEditField.String = '40'; % 25000 -> 625 points
 appBigWin.buildNetwork();
 assert(contains(appBigWin.StatusTextArea.String{1}, 'Built network:'), ...
     'downsampling below the threshold should let the same range build.');
