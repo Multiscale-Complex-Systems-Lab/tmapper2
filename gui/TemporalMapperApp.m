@@ -394,21 +394,22 @@ classdef TemporalMapperApp < handle
 
             totalTimer = tic;
 
-            app.StatusTextArea.String = {'Computing pairwise distances...'};
+            % -- distances and the k-NN graph in one step. X is handed over
+            % rather than a precomputed pdist2 matrix so tknndigraph can use
+            % its lowMemory path, which computes distances a block of rows
+            % at a time and never allocates an N-by-N array. That is what
+            % lets the app handle long recordings at all: peak goes from
+            % O(N^2) to O(blockSize*N), so the full bundled sample (56835
+            % rows, ~85 GB the dense way) builds in about 2 GB.
+            app.StatusTextArea.String = {'Computing distances and k-NN graph...'};
             drawnow
             if app.CancelRequested, app.reportCancelled(); return; end
             stepTimer = tic;
-            D = pdist2(X,X,'minkowski',2);
-            tDistances = toc(stepTimer);
-
-            app.StatusTextArea.String = {sprintf('Distances: %.2fs. Computing k-NN graph...', tDistances)};
-            drawnow
-            if app.CancelRequested, app.reportCancelled(); return; end
-            stepTimer = tic;
-            [g, par] = tknndigraph(D, k, tidx, ...
+            [g, par] = tknndigraph(X, k, tidx, ...
                 'timeExcludeRange', texclude, ...
                 'maxNeighborDistPrct', maxdistprct, ...
-                'maxNeighborDist', maxdist);
+                'maxNeighborDist', maxdist, ...
+                'lowMemory', true);
             tKnn = toc(stepTimer);
 
             app.StatusTextArea.String = {sprintf('k-NN graph: %.2fs. Simplifying graph...', tKnn)};
@@ -445,13 +446,13 @@ classdef TemporalMapperApp < handle
 
             tTotal = toc(totalTimer);
             if showRecurrence
-                timingLine = sprintf(['Timing (s): distances %.2f, k-NN %.2f, simplify %.2f, ' ...
+                timingLine = sprintf(['Timing (s): distances+k-NN %.2f, simplify %.2f, ' ...
                     'network plot %.2f, recurrence plot %.2f, total %.2f.'], ...
-                    tDistances, tKnn, tSimplify, tPlotNetwork, tPlotRecurrence, tTotal);
+                    tKnn, tSimplify, tPlotNetwork, tPlotRecurrence, tTotal);
             else
-                timingLine = sprintf(['Timing (s): distances %.2f, k-NN %.2f, simplify %.2f, ' ...
+                timingLine = sprintf(['Timing (s): distances+k-NN %.2f, simplify %.2f, ' ...
                     'network plot %.2f, total %.2f.'], ...
-                    tDistances, tKnn, tSimplify, tPlotNetwork, tTotal);
+                    tKnn, tSimplify, tPlotNetwork, tTotal);
             end
             statusLines = { ...
                 sprintf('Built network: %d nodes, %d edges. Resolved max distance = %.4g.', ...
@@ -838,10 +839,13 @@ classdef TemporalMapperApp < handle
                 L{end+1} = 'tsteps = diff(tvals);';
                 L{end+1} = 'tidx = round((tvals - tvals(1)) / min(tsteps)) + 1;';
             end
-            L{end+1} = 'D = pdist2(X,X,''minkowski'',2);';
+            L{end+1} = '%% X is passed straight to tknndigraph rather than a precomputed';
+            L{end+1} = '%% pdist2 matrix, so its lowMemory path can compute distances a block';
+            L{end+1} = '%% of rows at a time and never allocate an N-by-N array.';
             L{end+1} = '';
-            L{end+1} = sprintf(['[g, par] = tknndigraph(D, %g, tidx, ''timeExcludeRange'', %g, ' ...
-                '''maxNeighborDistPrct'', %g, ''maxNeighborDist'', %g);'], k, texclude, maxdistprct, maxdist);
+            L{end+1} = sprintf(['[g, par] = tknndigraph(X, %g, tidx, ''timeExcludeRange'', %g, ' ...
+                '''maxNeighborDistPrct'', %g, ''maxNeighborDist'', %g, ''lowMemory'', true);'], ...
+                k, texclude, maxdistprct, maxdist);
             L{end+1} = sprintf('[g_simp, members] = filtergraph(g, %g, ''reciprocal'', %d);', d, recip);
             L{end+1} = '';
 
@@ -1585,28 +1589,35 @@ classdef TemporalMapperApp < handle
             %OVERSIZEDWINDOWMESSAGE the error text for a row range whose
             %full pairwise distance matrix would be unreasonably large,
             %or '' if it is fine.
-            %   Peak cost is ~26.3 bytes per nPoints^2 -- about 3.3x the
-            %   distance matrix itself, since the pipeline holds several
-            %   nPoints-by-nPoints arrays at once (D, its working copy,
-            %   the geodesic matrix, and assorted logical masks). That
-            %   figure is measured, not assumed: process peak working set
-            %   was sampled from 2k to 20k points, and the model predicts
-            %   the 20k case to within 0.7%.
-            %   An untrimmed real dataset asks for absurd amounts on this
-            %   curve -- the bundled sample's full 57709 rows would need
-            %   ~87 GB -- so refuse with a number the user can act on
-            %   rather than let MATLAB thrash.
+            %   The numbers here are measured (process peak working set,
+            %   one fresh MATLAB per size), not assumed.
+            %   tknndigraph now runs on its lowMemory path, which never
+            %   forms an nPoints-by-nPoints array, so its cost is roughly
+            %   FLAT in nPoints -- hence the constant term.
+            %   filtergraph is what still scales quadratically: distances()
+            %   returns a full nPoints-by-nPoints geodesic matrix. That is
+            %   the binding constraint now, and the quadratic term below is
+            %   it. (Fixing that would raise this ceiling much further --
+            %   for an unweighted graph, thresholding geodesics at d is
+            %   reachability within d hops, which sparse boolean products
+            %   give without ever going dense.)
             %   Counted AFTER decimation, so raising downsample is a
             %   genuine fix rather than a way to sidestep the check.
-            bytesPerSquare = 26.3;
-            budgetGB = 2; % the limit is a memory budget, not a magic count
-            maxPoints = floor(sqrt(budgetGB*1e9/bytesPerSquare)); % ~8.7k points
+            %   Fitted to measured whole-GUI peaks (1.75 GB at 8000
+            %   points, 6.15 GB at 17320), which is what a user actually
+            %   pays: filtergraph's geodesic matrix AND, when the
+            %   recurrence plot is shown, TCMdistance's per-time-point
+            %   matrix, which is a second nPoints-by-nPoints array.
+            overheadGB = 0.6;      % roughly flat: the blocked distance pass
+            bytesPerSquare = 18.6; % the quadratic consumers above
+            budgetGB = 4;          % the limit is a memory budget, not a magic count
+            maxPoints = floor(sqrt(max(budgetGB-overheadGB,0)*1e9/bytesPerSquare));
             if nPoints > maxPoints
                 msg = sprintf(['The selected range leaves %d time points -- building a ' ...
                     'network that size needs ~%.1f GB of memory (the limit here is %.0f GB, ' ...
                     'about %d points). Restrict the row range (start row/end row) or ' ...
                     'increase downsample (N).'], ...
-                    nPoints, bytesPerSquare*nPoints^2/1e9, budgetGB, maxPoints);
+                    nPoints, overheadGB + bytesPerSquare*nPoints^2/1e9, budgetGB, maxPoints);
             else
                 msg = '';
             end

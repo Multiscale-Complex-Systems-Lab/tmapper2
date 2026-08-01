@@ -98,12 +98,21 @@ Several things the scripted pipeline leaves to you are handled automatically
 here:
 
 !!! note "Oversized row ranges are refused, not attempted"
-    The pairwise distance matrix is O(N²), so an untrimmed real dataset can
-    ask for tens of gigabytes — the bundled sample's full 57 709 rows would
-    need ~27 GB. Rather than thrash or exhaust memory, the app refuses up
-    front, before any of the expensive work, and tells you the figure and
-    how to fix it. The count is taken *after* decimation, so raising
-    **downsample (N)** is a real fix rather than a way around the check.
+    Rather than thrash or exhaust memory, the app refuses up front, before
+    any of the expensive work, and tells you the figure and how to fix it.
+    The count is taken *after* decimation, so raising **downsample (N)** is
+    a real fix rather than a way around the check.
+
+    The limit is a **memory budget** (4 GB, ~13 500 points) rather than a
+    magic number, fitted to measured whole-app peaks — 1.75 GB at 8 000
+    points, 6.15 GB at 17 320.
+
+    The graph build itself no longer sets that ceiling: it runs on
+    `tknndigraph`'s `lowMemory` path, which computes distances a block of
+    rows at a time and never allocates an N×N array, so its cost is roughly
+    *flat* in N. What still scales quadratically is `filtergraph`, whose
+    `distances()` returns a full N×N geodesic matrix, plus the recurrence
+    plot's per-time-point matrix when it is shown.
 
 !!! note "A stray row-index column is dropped"
     Writing a CSV without suppressing the index leaves an unnamed first
