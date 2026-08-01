@@ -130,4 +130,86 @@ assert(isequal(traf_min, [10;5]), 'pathtraffic min gave unexpected result.');
 assert(isequal(traf_max, [30;15]), 'pathtraffic max gave unexpected result.');
 assert(max(abs(traf_std - [10;sqrt(50)])) < 1e-9, 'pathtraffic std gave unexpected result.');
 
+% -- CycleCount on a complete digraph, where the answer is combinatorial
+% rather than hand-counted: K_n has exactly nchoosek(n,L)*(L-1)! simple
+% cycles of length L. This is the only check here that exercises cycles
+% longer than 3, and several lengths at once.
+n = 4;
+A_K4 = ones(n) - eye(n);
+Primes_K4 = CycleCount(A_K4, n);
+expected_K4 = arrayfun(@(L) nchoosek(n,L)*factorial(L-1), 1:n);
+expected_K4(1) = 0;  % no self-loops in K_n
+assert(max(abs(Primes_K4 - expected_K4)) < 1e-6, ...
+    'CycleCount on K4 should give [%s], got [%s].', ...
+    num2str(expected_K4), num2str(Primes_K4));
+
+% -- CycleCount with cycles of DIFFERENT lengths present at once: a 2-cycle
+% (1<->2) disjoint from a 4-cycle (3->4->5->6->3).
+A_mixed = zeros(6);
+A_mixed(1,2)=1; A_mixed(2,1)=1;
+A_mixed(3,4)=1; A_mixed(4,5)=1; A_mixed(5,6)=1; A_mixed(6,3)=1;
+Primes_mixed = CycleCount(A_mixed,4);
+assert(max(abs(Primes_mixed - [0 1 0 1])) < 1e-6, ...
+    'a disjoint 2-cycle and 4-cycle should give Primes=[0,1,0,1], got [%s].', ...
+    num2str(Primes_mixed));
+
+% -- CycleCutter, the cutting branch (only the no-cut branch was covered).
+% Cutting 1->2->3->4 at nodes 1 and 3 gives the two arcs between them.
+cut_two = CycleCutter([1 2 3 4], [1 3]);
+assert(iscell(cut_two) && numel(cut_two) == 2, ...
+    'cutting a 4-cycle at 2 points should give 2 paths, got %d.', numel(cut_two));
+cut_sorted = sort(cellfun(@(c) c(1), cut_two(:)'));
+assert(isequal(cut_sorted, [1 3]), ...
+    'each returned path should start at one of the cutting points.');
+assert(all(cellfun(@(c) ismember(c(end), [1 3]), cut_two)), ...
+    'each returned path should end at a cutting point.');
+% every edge of the cycle must survive the cut exactly once
+edgesFromPaths = [];
+for ci = 1:numel(cut_two)
+    pth = cut_two{ci};
+    edgesFromPaths = [edgesFromPaths; [pth(1:end-1)' pth(2:end)']]; %#ok<AGROW>
+end
+cycEdges = [1 2; 2 3; 3 4; 4 1];
+assert(isequal(sortrows(edgesFromPaths), sortrows(cycEdges)), ...
+    'cutting must preserve every edge of the cycle exactly once.');
+
+% -- a cutting point not present in the cycle is documented as ignored
+assert(isequal(CycleCutter([1 2 3], [2 99]), CycleCutter([1 2 3], 2)), ...
+    'cutting points absent from the cycle should be ignored.');
+
+% -- Cycles2Paths over two cycles sharing node 3, cut at that shared node:
+% every returned path must start and end at the cut point, and between them
+% the paths must cover both cycles' edges exactly.
+allcyc = {[1 2 3]; [3 4 5]};
+upaths = Cycles2Paths(allcyc, 3);
+assert(iscell(upaths) && numel(upaths) == 2, ...
+    'cutting two cycles at their single shared node should give 2 paths.');
+assert(all(cellfun(@(pth) pth(1)==3 && pth(end)==3, upaths)), ...
+    'each path should leave from and return to the cutting point.');
+
+% -- calMod: modularity of a graph split into two disconnected, equal
+% halves is exactly 1 - 1/c = 0.5 for c=2 communities; assigning every node
+% to ONE community gives exactly 0, straight from the definition (the
+% modularity matrix sums to zero). Both are exact, not approximations.
+W_two = zeros(6);
+W_two(1:3,1:3) = ones(3) - eye(3);   % triangle A
+W_two(4:6,4:6) = ones(3) - eye(3);   % triangle B, disconnected
+Q_split = calMod(W_two, [1 1 1 2 2 2]');
+Q_one   = calMod(W_two, ones(6,1));
+assert(abs(Q_split - 0.5) < 1e-10, ...
+    'two disconnected equal communities should give modularity 0.5, got %g.', Q_split);
+assert(abs(Q_one) < 1e-10, ...
+    'a single all-encompassing community should give modularity 0, got %g.', Q_one);
+assert(Q_split > Q_one, 'the correct split should score above the trivial one.');
+
+% -- calMod: a deliberately WRONG split (mixing the two triangles) must
+% score below the correct one, or the measure is not discriminating.
+Q_wrong = calMod(W_two, [1 1 2 1 2 2]');
+assert(Q_wrong < Q_split, ...
+    'a split that cuts across the true communities should score below the correct one.');
+
+% -- calMod: no edges at all is neither modular nor not, and must not be NaN
+assert(calMod(zeros(4), [1 1 2 2]') == 0, ...
+    'calMod should return 0 (not NaN) for an empty adjacency matrix.');
+
 disp('All tests passed.');
