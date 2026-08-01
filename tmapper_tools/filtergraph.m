@@ -62,18 +62,65 @@ p.parse(varargin{:});
 par = p.Results;
 
 A = weightedAdj(g);% adjacency matrix
-D = distances(g);% geodesic distance
-
-% -- connectivity within a distance threshold
-% threshold once, then transpose the LOGICAL rather than the double: D' on
-% a full N-by-N double allocates another 8 bytes per entry (3.5x slower).
-D_lt = D < d;
-if par.reciprocal
-    A_ = D_lt & D_lt';
+% -- connectivity within a distance threshold.
+% distances(g) returns a FULL N-by-N double, the single largest allocation
+% in the pipeline and what caps the usable number of time points. But those
+% geodesics are only ever compared against d, and for an UNWEIGHTED graph a
+% geodesic IS a hop count -- so "within distance d" is just "reachable
+% within a bounded number of hops", which sparse boolean products give
+% without ever going dense.
+%   Weighted graphs need real shortest paths, and so does the optional
+% D_simp output, so the dense route stays for those.
+isUnweighted = ~ismember('Weight', g.Edges.Properties.VariableNames);
+% hop counts are integers, so D < d means D <= hmax:
+%   d integer    -> hmax = d-1       (D<3 admits 1 and 2 hops)
+%   d fractional -> hmax = floor(d)  (D<3.5 admits 1, 2 and 3)
+if d == round(d)
+    hmax = d - 1;
 else
-    A_ = D_lt | D_lt';
+    hmax = floor(d);
 end
-clear D_lt
+useReach = isUnweighted && isfinite(d) && nargout < 4;
+
+D = [];
+if useReach
+    Ab = spones(A);            % sparse 0/1, direction preserved
+    n = size(Ab,1);
+    if hmax < 1
+        R = logical(sparse(n,n));   % nothing lies within distance d
+    else
+        R = logical(Ab);            % reachable in exactly 1 hop
+        P = R;
+        for h = 2:hmax
+            P = logical(spones(double(P) * Ab));   % exactly h hops
+            newR = R | P;
+            if nnz(newR) == nnz(R), break; end     % reachability saturated
+            R = newR;
+            if nnz(R) > 0.25*n^2                   % densifying -- the sparse
+                useReach = false; break            % route has stopped paying
+            end
+        end
+    end
+end
+
+if useReach
+    if par.reciprocal
+        A_ = R & R';
+    else
+        A_ = R | R';
+    end
+else
+    D = distances(g);% geodesic distance
+    % threshold once, then transpose the LOGICAL rather than the double: D' on
+    % a full N-by-N double allocates another 8 bytes per entry (3.5x slower).
+    D_lt = D < d;
+    if par.reciprocal
+        A_ = D_lt & D_lt';
+    else
+        A_ = D_lt | D_lt';
+    end
+    clear D_lt
+end
 A_ = zerodiag(A_); % remove self-loop
 
 % -- create graph out of nodes within said threshold
@@ -97,6 +144,9 @@ end
 % GUI and its generated code both request only g_simp and members), so
 % only pay for it when it is requested.
 if nargout >= 4
+    if isempty(D)
+        D = distances(g);   % only the D_simp output needs true geodesics
+    end
     D_simp = simplifyDistance(D,idx_newnodes); % shortest path between new nodes.
 else
     D_simp = [];
