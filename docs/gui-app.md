@@ -103,8 +103,11 @@ here:
     The count is taken *after* decimation, so raising **downsample (N)** is
     a real fix rather than a way around the check.
 
-    The limit is a **memory budget** (4 GB) rather than a magic number,
-    fitted to measured whole-app peaks.
+    The budget is **half this machine's physical RAM** (clamped to
+    2–32 GB), not a fixed number — half is a defensible share for one
+    analysis app, and using total rather than *currently available* keeps
+    the limit stable between runs. If the platform can't be queried it
+    falls back to 4 GB.
 
     Neither the graph build nor the simplification sets that ceiling any
     more. The build runs on `tknndigraph`'s `lowMemory` path, which
@@ -117,10 +120,15 @@ here:
     not waste. So the ceiling depends on whether you are showing it, and
     unchecking it is a real way to go bigger:
 
-    | Show recurrence plot | Peak at 20 000 points | Limit |
+    | Show recurrence plot | Peak memory | Scaling |
     | --- | --- | --- |
-    | on | 3.94 GB | ~20 000 points |
-    | off | 2.10 GB | ~31 000 points |
+    | on | 3.94 GB at 20 000 points | quadratic — usually binds first |
+    | off | 2.10 / 2.13 / 2.14 GB at 20 000 / 40 000 / 56 000 | **flat** |
+
+    With it hidden, memory stops being the constraint entirely, so the
+    guard switches to limiting on **time** (15 minutes) and says which of
+    the two you actually hit. On a 64 GB machine that works out at roughly
+    58 000 points with the recurrence plot and 130 000 without.
 
 !!! note "A stray row-index column is dropped"
     Writing a CSV without suppressing the index leaves an unnamed first

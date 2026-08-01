@@ -1590,7 +1590,45 @@ classdef TemporalMapperApp < handle
                 'gray','hsv','lines','prism','colorcube'};
         end
 
-        function msg = oversizedWindowMessage(nPoints, showRecurrence)
+        function gb = memoryBudgetGB()
+            %MEMORYBUDGETGB how much memory a build may reasonably use.
+            %   Half of physical RAM: a defensible share for a single
+            %   analysis app, and stable run to run -- unlike "currently
+            %   available", which swings with whatever else is open and
+            %   would make the size limit move unpredictably.
+            %   Clamped at both ends: enough to be useful on a small
+            %   machine, and not so large on a big one that a build takes
+            %   longer than anyone will wait (cost grows with N^2).
+            %   Falls back to a fixed 4 GB if the platform cannot be
+            %   queried, so this never becomes a source of failure.
+            totalGB = [];
+            try
+                if ispc
+                    [~, sys] = memory;
+                    totalGB = sys.PhysicalMemory.Total / 1e9;
+                elseif ismac
+                    [st, out] = system('sysctl -n hw.memsize');
+                    if st == 0
+                        totalGB = str2double(strtrim(out)) / 1e9;
+                    end
+                elseif isunix
+                    tok = regexp(fileread('/proc/meminfo'), ...
+                        'MemTotal:\s+(\d+)\s+kB', 'tokens', 'once');
+                    if ~isempty(tok)
+                        totalGB = str2double(tok{1}) * 1024 / 1e9;
+                    end
+                end
+            catch
+                totalGB = [];
+            end
+            if isempty(totalGB) || ~isfinite(totalGB) || totalGB <= 0
+                gb = 4; % couldn't tell -- keep the old conservative default
+                return
+            end
+            gb = min(max(0.5*totalGB, 2), 32);
+        end
+
+        function msg = oversizedWindowMessage(nPoints, showRecurrence, budgetGB)
             %OVERSIZEDWINDOWMESSAGE the error text for a row range whose
             %full pairwise distance matrix would be unreasonably large,
             %or '' if it is fine.
@@ -1619,24 +1657,51 @@ classdef TemporalMapperApp < handle
             %     shown  : 3.94 GB at 20000 points  -> ~8.0 bytes/nPoints^2
             %     hidden : 2.10 GB at 20000 points  -> ~3.3 bytes/nPoints^2
             if nargin < 2, showRecurrence = true; end % conservative default
-            overheadGB = 0.8;      % roughly flat: the blocked distance pass
-            if showRecurrence
-                bytesPerSquare = 8.0;  % TCMdistance's per-time-point matrix
-            else
-                bytesPerSquare = 3.3;
+            if nargin < 3 || isempty(budgetGB)
+                budgetGB = TemporalMapperApp.memoryBudgetGB();
             end
-            budgetGB = 4;          % the limit is a memory budget, not a magic count
-            maxPoints = floor(sqrt(max(budgetGB-overheadGB,0)*1e9/bytesPerSquare));
+            overheadGB = 0.8;      % roughly flat: the blocked distance pass
+            %   Measured coefficients, whole app, one fresh MATLAB per size:
+            %     shown : 20000 -> 3.94 GB / 107s. The recurrence plot is a
+            %             genuine per-time-point matrix, so memory is
+            %             quadratic and usually binds first.
+            %     hidden: 20000 -> 2.10 GB / 21s, 40000 -> 2.13 GB / 52s,
+            %             56000 -> 2.14 GB / 83s. Flat: with the build
+            %             blocked and filtergraph sparse, nothing left
+            %             grows with N^2, so memory never binds and TIME is
+            %             the real limit.
+            if showRecurrence
+                bytesPerSquare = 8.0;
+                secsPerSquare = 2.7e-7;
+            else
+                bytesPerSquare = 0.03; % ~flat; kept nonzero so the formula holds
+                secsPerSquare = 5.3e-8;
+            end
+            % Refuse on whichever runs out first. Time matters as much as
+            % memory here: a build nobody will wait for is no more usable
+            % than one that will not fit.
+            timeBudgetMin = 15;
+            maxPointsMem  = floor(sqrt(max(budgetGB-overheadGB,0)*1e9/bytesPerSquare));
+            maxPointsTime = floor(sqrt(timeBudgetMin*60/secsPerSquare));
+            maxPoints = min(maxPointsMem, maxPointsTime);
             if nPoints > maxPoints
+                if maxPointsTime < maxPointsMem
+                    reason = sprintf(['would take roughly %.0f minutes (the limit here is ' ...
+                        '%d minutes, about %d points)'], ...
+                        secsPerSquare*nPoints^2/60, timeBudgetMin, maxPoints);
+                else
+                    reason = sprintf(['needs ~%.1f GB of memory (the limit here is %.0f GB ' ...
+                        'of this machine''s RAM, about %d points)'], ...
+                        overheadGB + bytesPerSquare*nPoints^2/1e9, budgetGB, maxPoints);
+                end
                 msg = sprintf(['The selected range leaves %d time points -- building a ' ...
-                    'network that size needs ~%.1f GB of memory (the limit here is %.0f GB, ' ...
-                    'about %d points). Restrict the row range (start row/end row) or ' ...
-                    'increase downsample (N).'], ...
-                    nPoints, overheadGB + bytesPerSquare*nPoints^2/1e9, budgetGB, maxPoints);
+                    'network that size %s. Restrict the row range (start row/end row) or ' ...
+                    'increase downsample (N).'], nPoints, reason);
                 if showRecurrence
                     msg = [msg ' Unchecking "Show recurrence plot" also helps: it is the ' ...
                         'only part that still grows with the square of the number of points.'];
                 end
+
             else
                 msg = '';
             end
