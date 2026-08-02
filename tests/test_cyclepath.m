@@ -212,4 +212,119 @@ assert(Q_wrong < Q_split, ...
 assert(calMod(zeros(4), [1 1 2 2]') == 0, ...
     'calMod should return 0 (not NaN) for an empty adjacency matrix.');
 
+% ===== CycleCluster: direct contract tests =====
+% Previously reached only through CyclePathDecomp, so its clustering rule
+% was never asserted on its own.
+qcl = {'plotmat',false,'plotmds',false,'plothist',false};
+
+% -- disjoint cycles never merge, whatever the threshold
+cyc_disjoint = {[1 2 3];[4 5 6]};
+for thr = [0.01 0.5 0.99]
+    ci = CycleCluster(cyc_disjoint, thr, qcl{:});
+    close all
+    assert(isequal(size(ci),[2 1]) && numel(unique(ci))==2, ...
+        'cycles sharing no nodes should stay in separate clusters at thres=%g.', thr);
+end
+
+% -- identical cycles always merge (overlap is exactly 1)
+ci_same = CycleCluster({[1 2 3];[1 2 3]}, 0.99, qcl{:}); close all
+assert(numel(unique(ci_same))==1, 'identical cycles should land in one cluster.');
+
+% -- the threshold acts on |shared|/|union|, which is exactly 1/5 = 0.2 for
+% these two: a threshold below it merges, one above it does not
+cyc_share1 = {[1 2 3];[3 4 5]};
+ci_lo = CycleCluster(cyc_share1, 0.1, qcl{:}); close all
+ci_hi = CycleCluster(cyc_share1, 0.5, qcl{:}); close all
+assert(numel(unique(ci_lo))==1, 'overlap 0.2 should merge at thres=0.1.');
+assert(numel(unique(ci_hi))==2, 'overlap 0.2 should not merge at thres=0.5.');
+
+% -- three cycles chained by shared pairs: c1-c2 and c2-c3 each overlap by
+% 2/6 = 0.333, while c1 and c3 share nothing.
+cyc_chain = {[1 2 3 4];[3 4 5 6];[5 6 7 8]};
+
+% ---------------------------------------------------------------------
+% KNOWN DISCREPANCY, asserted as it currently behaves rather than as
+% documented. CycleCluster's help says "single-linkage ... if overlap >
+% thres, the two cycles belong to the same cluster", and the comment above
+% the call reads ":: single linkage" -- but the code passes 'complete' to
+% linkage(). Complete linkage cannot satisfy that stated rule: below,
+% overlap(c1,c2) = 0.333 > 0.2 yet the two land in DIFFERENT clusters,
+% because merging c1 into {c2,c3} would require the c1-c3 distance (1.0,
+% they share nothing) to fall under the cutoff.
+%   Single linkage would give [1 1 1] here; complete gives [1 2 2]. Which
+% is intended is a modelling decision with real consequences downstream
+% (cycle clusters drive the whole path decomposition), so this test pins
+% today's behaviour rather than quietly changing it.
+% ---------------------------------------------------------------------
+ci_chain = CycleCluster(cyc_chain, 0.2, qcl{:}); close all
+assert(isequal(ci_chain(:)', [1 2 2]), ...
+    ['CycleCluster currently uses COMPLETE linkage: expected [1 2 2] at thres=0.2, got %s. ' ...
+     'If this changed to single linkage the answer becomes [1 1 1] -- see the note above.'], ...
+    mat2str(ci_chain(:)'));
+CO_chain = CyclePathOverlap(cyc_chain,'type','node');
+assert(CO_chain(1,2) > 0.2 && ci_chain(1) ~= ci_chain(2), ...
+    'the documented "overlap>thres implies same cluster" rule does not hold under complete linkage.');
+
+ci_split = CycleCluster(cyc_chain, 0.4, qcl{:}); close all
+assert(numel(unique(ci_split))==3, ...
+    'above every pairwise overlap (0.333) all three cycles should stay separate.');
+
+% -- labels are 1..M with nothing skipped, as documented
+assert(isequal(sort(unique(ci_split))', 1:3), 'cluster labels should be 1..M contiguous.');
+
+% -- degenerate input: a single cycle short-circuits to one label rather
+% than tripping linkage() on one observation
+ci_one = CycleCluster({[1 2 3]}, 0.5, qcl{:}); close all
+assert(isequal(ci_one, 1), 'a single cycle should return exactly one label, got %s.', mat2str(ci_one));
+
+% ===== CycleClusterConn: direct contract tests =====
+% Three cycles chained by shared node-pairs, kept as three clusters so the
+% connectivity matrix has genuine off-diagonal structure to check.
+Ac = zeros(8);
+Ac(1,2)=1; Ac(2,3)=1; Ac(3,4)=1; Ac(4,1)=1;   % cycle 1: 1-2-3-4
+Ac(4,5)=1; Ac(5,6)=1; Ac(6,3)=1;              % cycle 2: 3-4-5-6
+Ac(6,7)=1; Ac(7,8)=1; Ac(8,5)=1;              % cycle 3: 5-6-7-8
+dgc = digraph(Ac);
+[conn, conn_dir, cnodes, cbound] = CycleClusterConn(dgc, cyc_chain, (1:3)');
+
+assert(isequal(size(conn),[3 3]) && isequal(size(conn_dir),[3 3]), ...
+    'connectivity matrices should be M-by-M for M clusters.');
+
+% documented: cell(i,j) = cell(j,i)
+for i = 1:3
+    for j = 1:3
+        assert(isequal(sort(conn{i,j}(:)), sort(conn{j,i}(:))), ...
+            'cluster_conn should be symmetric at (%d,%d).', i, j);
+    end
+end
+
+% the boundary between two clusters is exactly the nodes they share
+assert(isequal(sort(conn{1,2}(:))', [3 4]), 'clusters 1 and 2 share nodes 3 and 4.');
+assert(isequal(sort(conn{2,3}(:))', [5 6]), 'clusters 2 and 3 share nodes 5 and 6.');
+assert(isempty(conn{1,3}), 'clusters 1 and 3 share no nodes, so no boundary.');
+
+% clusters_nodes is the union of each cluster's cycles
+assert(isequal(sort(cnodes{1}(:))', 1:4), 'cluster 1 spans nodes 1-4.');
+assert(isequal(sort(cnodes{2}(:))', 3:6), 'cluster 2 spans nodes 3-6.');
+assert(isequal(sort(cnodes{3}(:))', 5:8), 'cluster 3 spans nodes 5-8.');
+
+% a cluster's boundary is the part of it shared with any other cluster
+assert(isequal(sort(cbound{1}(:))', [3 4]), 'cluster 1''s boundary is 3 and 4.');
+assert(isequal(sort(cbound{2}(:))', [3 4 5 6]), 'cluster 2 borders both neighbours.');
+assert(isequal(sort(cbound{3}(:))', [5 6]), 'cluster 3''s boundary is 5 and 6.');
+
+% every boundary node must actually belong to the cluster it bounds
+for i = 1:3
+    assert(all(ismember(cbound{i}, cnodes{i})), ...
+        'cluster %d has a boundary node that is not one of its own nodes.', i);
+end
+
+% the directed boundary is a subset of the undirected one
+for i = 1:3
+    for j = 1:3
+        assert(all(ismember(conn_dir{i,j}, conn{i,j})), ...
+            'cluster_conn_dir(%d,%d) should not contain nodes outside cluster_conn.', i, j);
+    end
+end
+
 disp('All tests passed.');
