@@ -242,28 +242,48 @@ assert(numel(unique(ci_hi))==2, 'overlap 0.2 should not merge at thres=0.5.');
 % 2/6 = 0.333, while c1 and c3 share nothing.
 cyc_chain = {[1 2 3 4];[3 4 5 6];[5 6 7 8]};
 
-% ---------------------------------------------------------------------
-% KNOWN DISCREPANCY, asserted as it currently behaves rather than as
-% documented. CycleCluster's help says "single-linkage ... if overlap >
-% thres, the two cycles belong to the same cluster", and the comment above
-% the call reads ":: single linkage" -- but the code passes 'complete' to
-% linkage(). Complete linkage cannot satisfy that stated rule: below,
-% overlap(c1,c2) = 0.333 > 0.2 yet the two land in DIFFERENT clusters,
-% because merging c1 into {c2,c3} would require the c1-c3 distance (1.0,
-% they share nothing) to fall under the cutoff.
-%   Single linkage would give [1 1 1] here; complete gives [1 2 2]. Which
-% is intended is a modelling decision with real consequences downstream
-% (cycle clusters drive the whole path decomposition), so this test pins
-% today's behaviour rather than quietly changing it.
-% ---------------------------------------------------------------------
+% -- the linkage method is a real modelling choice, so it is a parameter.
+% These two disagree on exactly this configuration, which is the point:
+% 'complete' needs every pair in a cluster above thres, 'single' merges on
+% any pair and therefore chains through c2.
 ci_chain = CycleCluster(cyc_chain, 0.2, qcl{:}); close all
 assert(isequal(ci_chain(:)', [1 2 2]), ...
-    ['CycleCluster currently uses COMPLETE linkage: expected [1 2 2] at thres=0.2, got %s. ' ...
-     'If this changed to single linkage the answer becomes [1 1 1] -- see the note above.'], ...
+    'the default (complete) linkage should give [1 2 2] at thres=0.2, got %s.', ...
     mat2str(ci_chain(:)'));
+ci_explicit = CycleCluster(cyc_chain, 0.2, qcl{:}, 'linkage','complete'); close all
+assert(isequal(ci_explicit(:)', [1 2 2]), ...
+    'asking for complete explicitly should match the default.');
+ci_single = CycleCluster(cyc_chain, 0.2, qcl{:}, 'linkage','single'); close all
+assert(isequal(ci_single(:)', [1 1 1]), ...
+    'single linkage should chain c1-c2-c3 into one cluster, got %s.', mat2str(ci_single(:)'));
+
+% single linkage is the one that satisfies the plain reading of the
+% threshold -- any pair overlapping above it ends up together. Complete
+% linkage deliberately does not, which is why the default matters.
 CO_chain = CyclePathOverlap(cyc_chain,'type','node');
-assert(CO_chain(1,2) > 0.2 && ci_chain(1) ~= ci_chain(2), ...
-    'the documented "overlap>thres implies same cluster" rule does not hold under complete linkage.');
+assert(CO_chain(1,2) > 0.2, 'c1 and c2 overlap above the threshold.');
+assert(ci_single(1) == ci_single(2), ...
+    'under single linkage, an above-threshold pair must share a cluster.');
+assert(ci_chain(1) ~= ci_chain(2), ...
+    'under complete linkage it need not, since c1 and c3 share nothing.');
+
+% an unknown method should be rejected rather than silently reinterpreted
+threw = false;
+try
+    CycleCluster(cyc_chain, 0.2, qcl{:}, 'linkage','nonesuch');
+catch err
+    threw = strcmp(err.identifier,'CycleCluster:invalidLinkage');
+end
+close all
+assert(threw, 'an unrecognised linkage method should raise CycleCluster:invalidLinkage.');
+
+% and CyclePathDecomp must pass the choice through rather than swallow it
+[~,pcn_cmp] = CyclePathDecomp(dg,'plotmat',false,'plotmds',false,'plothist',false, ...
+    'linkage','complete'); close all
+[~,pcn_sing] = CyclePathDecomp(dg,'plotmat',false,'plotmds',false,'plothist',false, ...
+    'linkage','single','clusterthres',0.1); close all
+assert(~isempty(pcn_cmp) && ~isempty(pcn_sing), ...
+    'CyclePathDecomp should accept and forward the linkage option.');
 
 ci_split = CycleCluster(cyc_chain, 0.4, qcl{:}); close all
 assert(numel(unique(ci_split))==3, ...
