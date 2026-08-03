@@ -194,6 +194,40 @@ assertThrows(@() plottmgraph(g_simp,colorvar_nan,members), 'plottmgraph:missingD
     'plottmgraph should reject x_label containing NaN.');
 close all
 
+% -- plottmgraph nodesizemode: all three documented modes must work and
+% must genuinely differ, and an unrecognised one must be rejected rather
+% than silently behaving as 'original' (whose implementation is an empty
+% switch arm, so any typo used to land there).
+rng(0); Nsz = 120;
+Xsz = [sin((1:Nsz)'/12), cos((1:Nsz)'/12), cumsum(randn(Nsz,1))/20];
+gsz = tknndigraph(Xsz,3,(1:Nsz)','timeExcludeRange',5);
+[gs_sz, mem_sz] = filtergraph(gsz,3,'reciprocal',true);
+cv_sz = (1:Nsz)';   % one value per time point, indexed through members
+
+markerSizes = struct();
+for mode = {'log','rank','original'}
+    fsz = figure('Visible','off');
+    plottmgraph(gs_sz, cv_sz, mem_sz, 'nodesizemode', mode{1});
+    hgsz = findobj(gca,'Type','GraphPlot');
+    assert(~isempty(hgsz), 'nodesizemode=%s should still draw a graph.', mode{1});
+    markerSizes.(mode{1}) = hgsz.MarkerSize;
+    close(fsz);
+end
+assert(~isequal(markerSizes.log, markerSizes.rank), ...
+    '''log'' and ''rank'' node sizing should differ.');
+assert(~isequal(markerSizes.log, markerSizes.original), ...
+    '''log'' and ''original'' node sizing should differ.');
+
+threw_ns = false;
+fsz = figure('Visible','off');
+try
+    plottmgraph(gs_sz, cv_sz, mem_sz, 'nodesizemode','bogus');
+catch err_ns
+    threw_ns = strcmp(err_ns.identifier,'plottmgraph:invalidNodeSizeMode');
+end
+close(fsz);
+assert(threw_ns, 'an unknown nodesizemode should raise plottmgraph:invalidNodeSizeMode.');
+
 disp('All tests passed.');
 
 function assertThrows(fcn, expectedID, msg)

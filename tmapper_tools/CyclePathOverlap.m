@@ -36,6 +36,13 @@ switch par.type
         end
     case 'node'
         c = cellfun(@(x) x(:), c,'uniformoutput',0);
+    otherwise
+        % Falling through here left c in its raw form, and the overlap came
+        % back as all zeros -- a plausible-looking "these cycles share
+        % nothing" rather than an error. That answer feeds CycleCluster,
+        % so a typo would quietly split every cycle into its own cluster.
+        error('CyclePathOverlap:invalidType', ...
+            'type must be ''edge'' or ''node''; got ''%s''.', char(string(par.type)));
 end
 
 % -- grouping cycles

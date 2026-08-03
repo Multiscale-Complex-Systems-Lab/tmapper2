@@ -114,6 +114,19 @@ c_overlap = {[1,2,3],[2,3,4]};
 CO_node = CyclePathOverlap(c_overlap,'type','node');
 assert(abs(CO_node(1,2) - 0.5) < 1e-10, 'node-type overlap should be 2/4=0.5.');
 
+% -- CyclePathOverlap: an unrecognised type used to fall through the
+% switch leaving the paths untransformed, and the overlap came back as all
+% ZEROS -- not an error, just a plausible "these cycles share nothing".
+% That feeds CycleCluster, so a typo would quietly split every cycle into
+% its own cluster rather than failing.
+threw_ct = false;
+try
+    CyclePathOverlap(c_overlap,'type','bogus');
+catch err_ct
+    threw_ct = strcmp(err_ct.identifier,'CyclePathOverlap:invalidType');
+end
+assert(threw_ct, 'an unknown overlap type should raise CyclePathOverlap:invalidType.');
+
 % -- CyclePathOverlap: edge-based overlap (default cycle=true, so each
 % path wraps back to its first node). Cycle1 edges {1-2,2-3,3-1}, cycle2
 % edges {2-3,3-4,4-2}; only edge 2-3 is shared, union has 5 unique edges.
