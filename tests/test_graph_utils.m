@@ -216,4 +216,79 @@ catch err_ai
 end
 assert(threw_ai, 'an all-Inf tcm should raise normtcm:allInfinite.');
 
+% ===== nodemeasure =====
+% nodesize renormalized to a probability measure -- the m(i) that normgeo
+% weights geodesics by, so it has to sum to 1 and stay proportional.
+mu = nodemeasure({[1 2 3];[4];[5 6]});
+assert(abs(sum(mu) - 1) < 1e-12, 'the node measure must sum to 1.');
+assert(max(abs(mu - [0.5;1/6;1/3])) < 1e-12, ...
+    'the measure should be proportional to member counts (3:1:2 of 6).');
+assert(isequal(size(mu),[3 1]), 'nodemeasure should return an N-by-1 column.');
+
+% an empty node carries no measure but still occupies a row
+mu_e = nodemeasure({[1 2];[];[3 4]});
+assert(mu_e(2) == 0 && abs(sum(mu_e) - 1) < 1e-12, ...
+    'an empty node should get measure 0 without unbalancing the rest.');
+
+% nothing anywhere means 0/0; pinned so the NaN is a known outcome rather
+% than a surprise if it ever reaches normgeo
+assert(all(isnan(nodemeasure({[];[]}))), ...
+    'an all-empty membership has no measure to normalize and yields NaN.');
+
+% ===== toVec =====
+assert(isequal(toVec([1 2;3 4]), [1;3;2;4]), ...
+    'toVec should flatten column-major, like (:).');
+assert(isequal(toVec({[1 2],[3 4]}), [1;2;3;4]), ...
+    'toVec should concatenate a flat cell of numeric arrays.');
+assert(isequal(toVec({[1 2],{3,[4 5]}}), (1:5)'), ...
+    'toVec should recurse into nested cells.');
+assert(isequal(toVec({[1 2 3],[4]}), (1:4)'), ...
+    'toVec should handle ragged cells, where cell2mat alone fails.');
+tv_empty = toVec({});
+assert(isempty(tv_empty) && size(tv_empty,2) <= 1, ...
+    'toVec of an empty cell should be empty, not an error.');
+assert(isequal(toVec(logical([1 0 1])), logical([1;0;1])), ...
+    'toVec should pass logical data through as a column.');
+tv_col = toVec({[1 2];[3 4]});
+assert(size(tv_col,2) == 1, 'toVec should always return a column, got %s.', mat2str(size(tv_col)));
+
+% ===== remapRange =====
+% pure linear remap: l2 + (x-l1)/(u1-l1)*(u2-l2)
+assert(remapRange(0,  0,10, 100,200) == 100, 'the lower bound should map to the lower bound.');
+assert(remapRange(10, 0,10, 100,200) == 200, 'the upper bound should map to the upper bound.');
+assert(remapRange(5,  0,10, 100,200) == 150, 'the midpoint should map to the midpoint.');
+assert(isequal(remapRange([0 5 10], 0,10, 100,200), [100 150 200]), ...
+    'remapRange should map elementwise over a vector.');
+assert(remapRange(7, 0,10, 0,10) == 7, 'mapping onto the same range should be the identity.');
+% an inverted target range reverses direction rather than failing
+assert(remapRange(0.5, 0,1, 10,0) == 5, 'an inverted target range should still interpolate.');
+assert(remapRange(0, 0,1, 10,0) == 10, 'an inverted target maps the low end to the high value.');
+% a zero-width source has no gradient to follow
+assert(isnan(remapRange(5, 5,5, 0,1)), 'a zero-width source range should give NaN, not a silent value.');
+
+% ===== findtaskn =====
+% blocks of 1s in an indicator. Boundary blocks matter, since the
+% implementation pads with a 0 at each end to find the transitions.
+[bs, be, bsz] = findtaskn([1 1 0 1 0 0 1]');
+assert(isequal(bs(:)', [1 4 7]), 'block starts should be 1, 4 and 7, got %s.', mat2str(bs(:)'));
+assert(isequal(be(:)', [2 4 7]), 'block ends should be 2, 4 and 7, got %s.', mat2str(be(:)'));
+assert(isequal(bsz(:)', [2 1 1]), 'block sizes should be 2, 1 and 1, got %s.', mat2str(bsz(:)'));
+assert(isequal(bsz, be - bs + 1), 'size must be consistent with start and end.');
+
+% a block touching the very start and one touching the very end are the
+% cases the padding exists for
+[bs_edge, be_edge] = findtaskn([1 1 1]');
+assert(isequal(bs_edge,1) && isequal(be_edge,3), ...
+    'an all-ones indicator should be a single block spanning everything.');
+
+[bs_none, be_none, bsz_none] = findtaskn(zeros(5,1));
+assert(isempty(bs_none) && isempty(be_none) && isempty(bsz_none), ...
+    'an indicator with no task should yield no blocks, not a zero-length block.');
+
+% a row vector should behave like a column -- the implementation forces
+% orientation with (:), so this is a contract worth holding
+[bs_row, be_row] = findtaskn([0 1 1 0]);
+assert(isequal(bs_row,2) && isequal(be_row,3), ...
+    'findtaskn should accept a row indicator as well as a column.');
+
 disp('All tests passed.');
