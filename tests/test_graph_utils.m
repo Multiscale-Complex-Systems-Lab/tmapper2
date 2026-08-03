@@ -46,4 +46,69 @@ A_unnamed = weightedAdj(g_unnamed);
 assert(full(A_unnamed(1,2)) == 3, ...
     'digraph2graph should still average weights correctly without node names.');
 
+% ===== nodesize =====
+% Trivial, but it is what every node-size mode in the plots is built on.
+assert(isequal(nodesize({[1 2 3];[4];[5 6]}), [3;1;2]), ...
+    'nodesize should count members per node.');
+assert(isequal(nodesize({[1 2 3];[];[4]}), [3;0;1]), ...
+    'an empty node should count as 0, not drop out.');
+ns_shape = nodesize({[1 2];[3]});
+assert(size(ns_shape,2)==1 && size(ns_shape,1)==2, ...
+    'nodesize should return an N-by-1 column, got %s.', mat2str(size(ns_shape)));
+
+% ===== findnodelabel =====
+% This is the aggregation behind every "Label method" choice in the GUI,
+% so each branch gets a hand-computed answer rather than a smoke check.
+mem = {[1 2 3];[4 5]};
+lab = [10 20 30 7 9];      % node 1 sees [10 20 30], node 2 sees [7 9]
+
+assert(isequal(findnodelabel(mem, lab, 'labelmethod','mean'), [20;8]), ...
+    'mean should average each node''s member labels.');
+assert(isequal(findnodelabel(mem, lab, 'labelmethod','median'), [20;8]), ...
+    'median should take the middle of each node''s member labels.');
+assert(isequal(findnodelabel(mem, lab, 'labelmethod','none'), [0;0]), ...
+    '''none'' should flatten every node to 0.');
+assert(isequal(findnodelabel(mem, lab), findnodelabel(mem, lab, 'labelmethod','mode')), ...
+    'mode should be the default label method.');
+
+% mode picks the most frequent value, not the first or the largest
+mem_mode = {[1 2 3 4]};
+assert(isequal(findnodelabel(mem_mode, [5 9 9 1], 'labelmethod','mode'), 9), ...
+    'mode should return the most frequent member label.');
+
+% ties matter for categorical colouring, where labels are arbitrary codes:
+% MATLAB's mode resolves a tie to the SMALLEST value, so a node split
+% evenly between two categories always shows the lower-numbered one.
+assert(isequal(findnodelabel({[1 2]}, [7 3], 'labelmethod','mode'), 3), ...
+    'a two-way tie in mode should resolve to the smaller label.');
+
+% a function handle is applied per node and must yield a scalar
+assert(isequal(findnodelabel(mem, lab, 'labelmethod',@max), [30;9]), ...
+    'a function handle should be applied to each node''s member labels.');
+assert(isequal(findnodelabel(mem, lab, 'labelmethod',@(v) v(1)), [10;7]), ...
+    'an anonymous handle should receive the member labels in order.');
+
+% mean and median genuinely differ on a skewed node, so these are not
+% accidentally testing the same code path
+mem_skew = {[1 2 3 4]};
+lab_skew = [1 2 3 100];
+assert(isequal(findnodelabel(mem_skew, lab_skew, 'labelmethod','mean'), 26.5) && ...
+       isequal(findnodelabel(mem_skew, lab_skew, 'labelmethod','median'), 2.5), ...
+    'mean and median should differ on a skewed node (26.5 vs 2.5).');
+
+% shape and length follow the members, not the labels
+lbl_shape = findnodelabel({[1];[2];[3]}, [4 5 6], 'labelmethod','mean');
+assert(isequal(size(lbl_shape), [3 1]), ...
+    'findnodelabel should return one row per node, got %s.', mat2str(size(lbl_shape)));
+
+% an unrecognised method used to fall through the switch and surface as
+% MATLAB:unassignedOutputs, which named the wrong problem
+threw_lm = false;
+try
+    findnodelabel(mem, lab, 'labelmethod','bogus');
+catch err_lm
+    threw_lm = strcmp(err_lm.identifier, 'findnodelabel:invalidLabelMethod');
+end
+assert(threw_lm, 'an unknown labelmethod should raise findnodelabel:invalidLabelMethod.');
+
 disp('All tests passed.');
