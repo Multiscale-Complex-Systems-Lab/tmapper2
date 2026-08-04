@@ -1662,9 +1662,11 @@ classdef TemporalMapperApp < handle
             end
             overheadGB = 0.8;      % roughly flat: the blocked distance pass
             %   Measured coefficients, whole app, one fresh MATLAB per size:
-            %     shown : 20000 -> 3.94 GB / 107s. The recurrence plot is a
-            %             genuine per-time-point matrix, so memory is
-            %             quadratic and usually binds first.
+            %     shown : 20000 -> 4.08 GB / 25s, 30000 -> 8.07 GB / 45s.
+            %             The recurrence plot is a genuine per-time-point
+            %             matrix, so memory is quadratic and binds first.
+            %             (It was 107s until TCMdistance stopped walking
+            %             every node pair; memory is unchanged.)
             %     hidden: 20000 -> 2.10 GB / 21s, 40000 -> 2.13 GB / 52s,
             %             56000 -> 2.14 GB / 83s. Flat: with the build
             %             blocked and filtergraph sparse, nothing left
@@ -1672,7 +1674,7 @@ classdef TemporalMapperApp < handle
             %             the real limit.
             if showRecurrence
                 bytesPerSquare = 8.0;
-                secsPerSquare = 2.7e-7;
+                secsPerSquare = 6.25e-8;
             else
                 bytesPerSquare = 0.03; % ~flat; kept nonzero so the formula holds
                 secsPerSquare = 5.3e-8;

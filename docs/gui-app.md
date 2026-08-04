@@ -122,13 +122,13 @@ here:
 
     | Show recurrence plot | Peak memory | Scaling |
     | --- | --- | --- |
-    | on | 3.94 GB at 20 000 points | quadratic — usually binds first |
+    | on | 4.08 GB at 20 000 points | quadratic — binds first |
     | off | 2.10 / 2.13 / 2.14 GB at 20 000 / 40 000 / 56 000 | **flat** |
 
     With it hidden, memory stops being the constraint entirely, so the
     guard switches to limiting on **time** (15 minutes) and says which of
     the two you actually hit. On a 64 GB machine that works out at roughly
-    58 000 points with the recurrence plot and 130 000 without.
+    62 000 points with the recurrence plot and 130 000 without.
 
 !!! note "A stray row-index column is dropped"
     Writing a CSV without suppressing the index leaves an unnamed first

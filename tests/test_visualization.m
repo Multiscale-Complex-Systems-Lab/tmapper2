@@ -228,6 +228,47 @@ end
 close(fsz);
 assert(threw_ns, 'an unknown nodesizemode should raise plottmgraph:invalidNodeSizeMode.');
 
+% -- TCMdistance: the fast path assumes each time point belongs to exactly
+% one node, which is what filtergraph guarantees. Overlapping membership
+% must still fall back to the pairwise loop, where nanmin arbitrates.
+rng(3); Ntc = 200;
+Xtc = [sin((1:Ntc)'/12), cos((1:Ntc)'/12), cumsum(randn(Ntc,1))/20];
+gtc = tknndigraph(Xtc,3,(1:Ntc)','timeExcludeRange',5);
+[gs_tc, mem_tc] = filtergraph(gtc,3,'reciprocal',true);
+
+D_tc = TCMdistance(gs_tc, mem_tc);
+allt_tc = cell2mat(cellfun(@(x) x(:), mem_tc(:), 'UniformOutput', false));
+assert(numel(allt_tc) == numel(unique(allt_tc)), ...
+    'filtergraph members should partition the time points, so the fast path applies.');
+assert(isequal(size(D_tc), [Ntc Ntc]), ...
+    'TCMdistance should be one row/column per time point, got %s.', mat2str(size(D_tc)));
+assert(all(diag(D_tc) == 0), 'a time point is at distance 0 from itself.');
+% NOT symmetric, and deliberately so: these are geodesics on a DIGRAPH, so
+% the distance from i to j need not equal the distance back.
+assert(~isequaln(D_tc, D_tc.'), ...
+    'directed geodesics should generally give an asymmetric recurrence matrix.');
+
+% time points sharing a node are at distance 0 from each other
+firstBig = find(cellfun(@numel, mem_tc) > 1, 1);
+if ~isempty(firstBig)
+    mi = mem_tc{firstBig};
+    assert(all(all(D_tc(mi,mi) == 0)), ...
+        'time points within one node should all be 0 apart.');
+end
+
+% overlapping membership takes the loop, and a shared time point must get
+% the MINIMUM of the competing distances rather than whichever wrote last
+g_ov = digraph([0 1; 1 0]);
+D_ov = TCMdistance(g_ov, {[1 2 3];[3 4 5]});
+assert(isequal(size(D_ov), [5 5]), 'overlapping membership should still cover the full range.');
+assert(D_ov(3,3) == 0, 'a shared time point is still 0 from itself.');
+
+% time points covered by no node stay NaN rather than defaulting to 0
+D_gap = TCMdistance(g_ov, {[1 2];[7 8]});
+assert(isequal(size(D_gap), [8 8]), 'the matrix should span the full covered range.');
+assert(all(all(isnan(D_gap(3:6,3:6)))), ...
+    'time points belonging to no node should remain NaN, not 0.');
+
 disp('All tests passed.');
 
 function assertThrows(fcn, expectedID, msg)
