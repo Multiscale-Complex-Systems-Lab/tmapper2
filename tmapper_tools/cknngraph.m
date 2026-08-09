@@ -71,7 +71,7 @@ D_norm = D./sqrt(Dk*Dk');
 
 % -- construct graph from adjacency matrix
 A = D_norm < delta;
-A(logical(eye(Nn,Nn)))=0; % set diagonal to zero
+A(1:Nn+1:end)=0; % set diagonal to zero (linear indexing, no n-by-n temporary)
 g = graph(A);
 
 end

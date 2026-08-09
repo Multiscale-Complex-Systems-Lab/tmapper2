@@ -30,11 +30,22 @@ par = p.Results;
 N_nodes = length(geod);% number of nodes
 
 if nargin < 2 || isempty(nsize)% if nsize not provided, assume = 1
-    nsize = ones(N_nodes); 
+    % ones(N_nodes,1), not ones(N_nodes): the latter builds an N-by-N
+    % matrix, and nsize/sum(nsize) then becomes a least-squares solve. It
+    % lands on the uniform measure anyway, but by accident and with a
+    % little floating-point noise.
+    nsize = ones(N_nodes,1);
 end
 
-% -- handle inf
-geod(geod==Inf) = max(geod(geod<Inf));
+% -- handle inf. Unreachable geodesics stand in as the network diameter;
+% with nothing finite to take that from there is no sensible substitute,
+% and the bare assignment fails with a shape error naming nothing.
+finiteGeod = geod(geod<Inf);
+if isempty(finiteGeod)
+    error('normgeo:allInfinite', ...
+        'geod has no finite entries, so there is no diameter to replace Inf with.');
+end
+geod(geod==Inf) = max(finiteGeod);
 
 % -- weight nodes and geodesics
 nm = nsize/sum(nsize);% node measure

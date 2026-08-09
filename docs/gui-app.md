@@ -98,12 +98,37 @@ Several things the scripted pipeline leaves to you are handled automatically
 here:
 
 !!! note "Oversized row ranges are refused, not attempted"
-    The pairwise distance matrix is O(N²), so an untrimmed real dataset can
-    ask for tens of gigabytes — the bundled sample's full 57 709 rows would
-    need ~27 GB. Rather than thrash or exhaust memory, the app refuses up
-    front, before any of the expensive work, and tells you the figure and
-    how to fix it. The count is taken *after* decimation, so raising
-    **downsample (N)** is a real fix rather than a way around the check.
+    Rather than thrash or exhaust memory, the app refuses up front, before
+    any of the expensive work, and tells you the figure and how to fix it.
+    The count is taken *after* decimation, so raising **downsample (N)** is
+    a real fix rather than a way around the check.
+
+    The budget is **half this machine's physical RAM** (clamped to
+    2–32 GB), not a fixed number — half is a defensible share for one
+    analysis app, and using total rather than *currently available* keeps
+    the limit stable between runs. If the platform can't be queried it
+    falls back to 4 GB.
+
+    Neither the graph build nor the simplification sets that ceiling any
+    more. The build runs on `tknndigraph`'s `lowMemory` path, which
+    computes distances a block of rows at a time and never allocates an
+    N×N array; `filtergraph` thresholds geodesics by sparse reachability
+    rather than materialising them. Both are roughly *flat* in N.
+
+    What remains is the **recurrence plot**, which is genuinely an N×N
+    image of geodesic distances between time points — the feature itself,
+    not waste. So the ceiling depends on whether you are showing it, and
+    unchecking it is a real way to go bigger:
+
+    | Show recurrence plot | Peak memory | Scaling |
+    | --- | --- | --- |
+    | on | 4.08 GB at 20 000 points | quadratic — binds first |
+    | off | 2.10 / 2.13 / 2.14 GB at 20 000 / 40 000 / 56 000 | **flat** |
+
+    With it hidden, memory stops being the constraint entirely, so the
+    guard switches to limiting on **time** (15 minutes) and says which of
+    the two you actually hit. On a 64 GB machine that works out at roughly
+    62 000 points with the recurrence plot and 130 000 without.
 
 !!! note "A stray row-index column is dropped"
     Writing a CSV without suppressing the index leaves an unnamed first

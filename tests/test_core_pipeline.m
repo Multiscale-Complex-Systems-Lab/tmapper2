@@ -163,14 +163,16 @@ assert(findedge(g_maxdist,4,6) == 0, 'expected spatial shortcut 4->6 to be cut b
 % wiring rather than re-deriving MATLAB's percentile interpolation by hand).
 % The percentile is computed internally on the *masked* D (self-loops and
 % the default timeExcludeRange=1 temporal-successor entries set to Inf), so
-% replicate that masking here rather than using the raw Dd.
+% replicate that masking here rather than using the raw Dd -- and over the
+% FINITE entries only, since those Infs are excluded pairs rather than real
+% distances and would otherwise drag the cutoff upward.
 prct = 30;
 Dd_masked = Dd;
 Dd_masked(logical(eye(Nd))) = Inf;
 for i = 1:Nd-1
     Dd_masked(i,i+1) = Inf;
 end
-equivalent_threshold = prctile(Dd_masked(:), prct);
+equivalent_threshold = prctile(Dd_masked(isfinite(Dd_masked)), prct);
 g_prct = tknndigraph(Dd,kd,tidxd,'maxNeighborDistPrct',prct);
 g_equivdist = tknndigraph(Dd,kd,tidxd,'maxNeighborDist',equivalent_threshold);
 assert(isequal(adjacency(g_prct), adjacency(g_equivdist)), ...
@@ -313,6 +315,99 @@ assertThrows(@() filtergraph(D,1), 'filtergraph:invalidInput', ...
     'filtergraph should reject a non-graph/digraph first argument.');
 assertThrows(@() filtergraph(g,-1), 'filtergraph:invalidInput', ...
     'filtergraph should reject a non-positive distance threshold.');
+
+% -- lowMemory: the blocked path must produce exactly the same graph as the
+% dense one. It never forms an N-by-N matrix, computing distances a block
+% of rows at a time, which is what makes large N feasible at all.
+rng(7);
+Nlm = 400;
+Xlm = [sin((1:Nlm)'/12), cos((1:Nlm)'/12), cumsum(randn(Nlm,1))/20];
+tlm = (1:Nlm)';
+for kk = [2 3]
+    for tex = [1 5]
+        for recip = [true false]
+            for tes = [true false]
+                g_dense = tknndigraph(Xlm,kk,tlm,'timeExcludeRange',tex, ...
+                    'reciprocal',recip,'timeExcludeSpace',tes);
+                g_block = tknndigraph(Xlm,kk,tlm,'timeExcludeRange',tex, ...
+                    'reciprocal',recip,'timeExcludeSpace',tes,'lowMemory',true,'blockSize',37);
+                assert(isequal(adjacency(g_dense), adjacency(g_block)), ...
+                    'lowMemory should reproduce the dense graph exactly (k=%d, tex=%d, recip=%d, tes=%d).', ...
+                    kk, tex, recip, tes);
+            end
+        end
+    end
+end
+
+% block size is a memory dial only -- it must not affect the result, and
+% a block larger than N (a single block) must work too
+g_ref = tknndigraph(Xlm,3,tlm,'timeExcludeRange',5);
+for bs = [1 13 399 400 1000]
+    g_bs = tknndigraph(Xlm,3,tlm,'timeExcludeRange',5,'lowMemory',true,'blockSize',bs);
+    assert(isequal(adjacency(g_ref), adjacency(g_bs)), ...
+        'blockSize=%d changed the result; it should only trade memory for speed.', bs);
+end
+
+% a gapped time index exercises the temporal-band construction
+tgap = [(1:200)'; (301:500)'];
+assert(isequal( ...
+    adjacency(tknndigraph(Xlm,3,tgap,'timeExcludeRange',5)), ...
+    adjacency(tknndigraph(Xlm,3,tgap,'timeExcludeRange',5,'lowMemory',true,'blockSize',64))), ...
+    'lowMemory should handle a gapped time index identically.');
+
+% the percentile cutoff needs the global distance distribution, which
+% blocking never holds; it is accumulated as a histogram during the same
+% pass, exact to one bin width. That is far below the scale that moves an
+% edge, so the graphs must still match.
+for prct = [95 75 50]
+    [gd_p, pard] = tknndigraph(Xlm,3,tlm,'timeExcludeRange',5,'maxNeighborDistPrct',prct);
+    [gb_p, parb] = tknndigraph(Xlm,3,tlm,'timeExcludeRange',5,'maxNeighborDistPrct',prct, ...
+        'lowMemory',true,'blockSize',37);
+    relerr = abs(parb.maxNeighborDist - pard.maxNeighborDist)/pard.maxNeighborDist;
+    assert(relerr < 1e-4, ...
+        'histogram percentile should match prctile closely (prct=%d, rel err %.2e).', prct, relerr);
+    assert(isequal(adjacency(gd_p), adjacency(gb_p)), ...
+        'lowMemory should reproduce the dense graph under a percentile cutoff (prct=%d).', prct);
+end
+
+% -- custom distance metric. When X is passed the metric is ours to choose,
+% and it must reach both paths identically.
+for metric = {'cityblock', 'chebychev', 'cosine', {'minkowski',3}}
+    m = metric{1};
+    if iscell(m), margs = m; mname = m{1}; else, margs = {m}; mname = m; end
+    D_m = pdist2(Xlm, Xlm, margs{:});
+    g_pre  = tknndigraph(D_m, 3, tlm, 'timeExcludeRange', 5);
+    g_dist = tknndigraph(Xlm, 3, tlm, 'timeExcludeRange', 5, 'distance', m);
+    assert(isequal(adjacency(g_pre), adjacency(g_dist)), ...
+        'distance=%s should match feeding the equivalent precomputed matrix.', mname);
+    g_lm = tknndigraph(Xlm, 3, tlm, 'timeExcludeRange', 5, 'distance', m, ...
+        'lowMemory', true, 'blockSize', 37);
+    assert(isequal(adjacency(g_pre), adjacency(g_lm)), ...
+        'distance=%s should give the same graph on the lowMemory path.', mname);
+end
+
+% a function handle works too (pdist2 calls it per row-pair block)
+gh_dense = tknndigraph(Xlm, 3, tlm, 'timeExcludeRange', 5, ...
+    'distance', @(zi,zj) sqrt(sum((zi-zj).^2,2)));
+assert(isequal(adjacency(gh_dense), ...
+    adjacency(tknndigraph(Xlm,3,tlm,'timeExcludeRange',5))), ...
+    'a Euclidean function handle should reproduce the default metric.');
+
+% a metric alongside a precomputed D is a silent no-op waiting to happen
+assertThrows(@() tknndigraph(pdist2(Xlm,Xlm), 3, tlm, 'distance', 'cityblock'), ...
+    'tknndigraph:distanceNeedsX', ...
+    'supplying a metric with a precomputed distance matrix should be rejected.');
+
+% lowMemory needs coordinates: handed a precomputed D there is nothing left
+% to save, so it should say so rather than silently doing the dense thing
+Dlm = pdist2(Xlm,Xlm);
+assertThrows(@() tknndigraph(Dlm,3,tlm,'lowMemory',true), 'tknndigraph:lowMemoryNeedsX', ...
+    'lowMemory should reject a precomputed distance matrix.');
+
+% and missing data must still be rejected on this path
+Xnan = Xlm; Xnan(5,2) = NaN;
+assertThrows(@() tknndigraph(Xnan,3,tlm,'lowMemory',true), 'tknndigraph:missingData', ...
+    'lowMemory should reject NaN input just as the dense path does.');
 
 disp('All tests passed.');
 

@@ -5,9 +5,10 @@ function [clusterIdx] = CycleCluster(allcycles,thres,varargin)
 %   [clusterIdx] = CycleCluster(allcycles,thres,...)
 % input:
 %   allcycles: N-by-1 cell array, each cell contains the path of one cycle
-%   thres: a number between 0 and 1, a cut-off threshold for single-linkage
-%   clustering. Such that if overlap>thres, the two cycles belong to
-%   the same cluster. 
+%   thres: a number between 0 and 1, a cut-off threshold for the
+%   clustering. Two cycles are candidates for the same cluster when their
+%   overlap exceeds thres; whether they end up together also depends on
+%   'linkage' below. 
 % output: 
 %   clusterIdx: N-by-1 integer array, each integer is the index of a
 %   loop-cluster. Integers are from 1 to M. 
@@ -17,6 +18,18 @@ function [clusterIdx] = CycleCluster(allcycles,thres,varargin)
 %   plothist: plot the histogram of linkage distance. Default true.
 %   reordermat: reorder rows/cols of overlap matrix according to cluster
 %   assignment. Default true.
+%   linkage: the agglomeration method handed to linkage(). Default
+%   'complete', which is what this function has always done despite an
+%   older comment here reading "single linkage".
+%     'complete' requires EVERY pair in a cluster to overlap above thres,
+%       so a cycle only joins a group it resembles as a whole.
+%     'single' merges on ANY pair above thres, matching the simpler
+%       reading "overlap>thres implies same cluster" -- but it chains:
+%       cycles sharing nothing can land together via an intermediary.
+%   The two genuinely differ. On three cycles where c1-c2 and c2-c3 each
+%   overlap 0.333 and c1-c3 share nothing, at thres=0.2 'complete' gives
+%   [1 2 2] and 'single' gives [1 1 1]. Cycle clusters drive the whole
+%   path decomposition, so this choice propagates -- change it knowingly.
 %{
 ~ Author: Mengsen Zhang <mengsenzhang@gmail.com> 9-1-2020 ~
 modifications:
@@ -31,6 +44,7 @@ p.addParameter('plotmat',true)
 p.addParameter('plotmds',false)
 p.addParameter('plothist',true)
 p.addParameter('reordermat',true)
+p.addParameter('linkage','complete') % see the note in the help above
 p.parse(varargin{:})
 par=p.Results;
 
@@ -61,8 +75,15 @@ if par.plotmds
     scatter(Y(:,1),Y(:,2))
 end
 
-% :: single linkage
-Z=linkage(squareform(1-prct_overlap),'complete');
+% :: agglomerate. 'complete' by default -- see the 'linkage' note in the
+% help; an earlier comment here claimed single linkage, which this has
+% never done.
+validLinkage = {'single','complete','average','weighted','centroid','median','ward'};
+if ~(ischar(par.linkage) || isstring(par.linkage)) || ~ismember(lower(char(par.linkage)), validLinkage)
+    error('CycleCluster:invalidLinkage', ...
+        'linkage must be one of: %s.', strjoin(validLinkage, ', '));
+end
+Z=linkage(squareform(1-prct_overlap),lower(char(par.linkage)));
 % :: visualize linkage
 if par.plothist
     % figure

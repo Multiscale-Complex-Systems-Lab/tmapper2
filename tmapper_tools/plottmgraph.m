@@ -98,6 +98,15 @@ if ~buniform%adjust nodesize with rank
             nodesize = tiedrank(nodesize);% the marker size reflects the rank of the node size
         case 'log'
             nodesize = log10(nodesize);% on log scale.
+        case 'original'
+            % the raw member counts, rescaled below like the others. This
+            % arm is a no-op by design, but stating it means an
+            % unrecognised mode is a mistake rather than a silent alias
+            % for 'original'.
+        otherwise
+            error('plottmgraph:invalidNodeSizeMode', ...
+                'nodesizemode must be ''log'', ''rank'' or ''original''; got ''%s''.', ...
+                char(string(par.nodesizemode)));
     end
     nodesize = rescale(nodesize, min(par.nodesizerange), max(par.nodesizerange));
 else%adjust nodesize with number of nodes

@@ -34,6 +34,13 @@ else
             m = cell2mat(cellfun(@(x) median(x_label(x)), members,'uniformoutput',0));
         case "none"% no color
             m = cell2mat(cellfun(@(x) 0,members,'uniformoutput',0));
+        otherwise
+            % without this, an unrecognised method falls straight through
+            % the switch and surfaces as MATLAB:unassignedOutputs -- an
+            % internal-looking error that says nothing about the cause.
+            error('findnodelabel:invalidLabelMethod', ...
+                ['labelmethod must be ''mode'', ''mean'', ''median'', ''none'', ' ...
+                 'or a function handle; got ''%s''.'], char(string(par.labelmethod)));
     end
 end
 end

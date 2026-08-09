@@ -257,20 +257,61 @@ delete(appHelp);
 % -- memory guard: a full pairwise distance matrix is O(N^2), so an
 % untrimmed real dataset can ask for tens of GB. Refuse with a number the
 % user can act on rather than hanging or exhausting memory.
-assert(isempty(TemporalMapperApp.oversizedWindowMessage(100)), ...
+% An explicit budget throughout, so these assertions mean the same thing on
+% every machine -- the default budget is derived from physical RAM, which
+% would otherwise make the limit (and therefore this test) hardware-dependent.
+assert(isempty(TemporalMapperApp.oversizedWindowMessage(100, true, 4)), ...
     'a small window should not trip the memory guard.');
-bigMsg = TemporalMapperApp.oversizedWindowMessage(50000);
+bigMsg = TemporalMapperApp.oversizedWindowMessage(50000, true, 4);
 assert(~isempty(bigMsg) && contains(bigMsg, 'GB'), ...
     'an oversized window should be refused with a memory estimate.');
-assert(contains(bigMsg, '20.0 GB'), ...
-    'the estimate should be the actual size of the matrix (50000^2 float64 = 20 GB).');
+assert(contains(bigMsg, '20.8 GB'), ...
+    ['the estimate should be the measured whole-app peak (~8.0 bytes per N^2 plus a ' ...
+     'flat term), not the size of any single matrix.']);
+assert(contains(bigMsg, 'RAM'), 'the memory refusal should say the budget comes from the machine.');
+
+% the recurrence plot is the only part still growing with N^2, so hiding it
+% genuinely raises the ceiling -- and the guard should say so
+% 50000 points is fine with the recurrence plot hidden -- nothing there
+% grows with N^2 any more -- so compare the hint at a size refused either way
+hugeShown  = TemporalMapperApp.oversizedWindowMessage(200000, true, 4);
+hugeHidden = TemporalMapperApp.oversizedWindowMessage(200000, false, 4);
+assert(~isempty(hugeShown) && ~isempty(hugeHidden), '200000 points is oversized either way.');
+assert(contains(hugeShown, 'Show recurrence plot') && ~contains(hugeHidden, 'Show recurrence plot'), ...
+    'the recurrence-plot hint should appear only when it is actually shown.');
+assert(isempty(TemporalMapperApp.oversizedWindowMessage(50000, false, 4)), ...
+    'with the recurrence plot hidden, 50000 points should now be allowed.');
+assert(isempty(TemporalMapperApp.oversizedWindowMessage(25000, false, 4)) && ...
+       ~isempty(TemporalMapperApp.oversizedWindowMessage(25000, true, 4)), ...
+    '25000 points should be allowed without the recurrence plot but not with it, at a 4 GB budget.');
+
+% with the recurrence plot hidden nothing grows with N^2 any more, so memory
+% stops being the binding constraint and time takes over -- the refusal must
+% say which limit was actually hit rather than always blaming memory
+timeMsg = TemporalMapperApp.oversizedWindowMessage(200000, false, 32);
+assert(~isempty(timeMsg) && contains(timeMsg, 'minutes') && ~contains(timeMsg, 'GB'), ...
+    'a hidden-recurrence refusal at large N should cite time, not memory.');
+memMsg = TemporalMapperApp.oversizedWindowMessage(50000, true, 4);
+assert(contains(memMsg, 'GB') && ~contains(memMsg, 'minutes'), ...
+    'a memory-bound refusal should cite memory, not time.');
+
+% a bigger budget must permit more points -- that is the whole point of
+% deriving it from the machine rather than fixing it
+assert(~isempty(TemporalMapperApp.oversizedWindowMessage(30000, true, 4)) && ...
+        isempty(TemporalMapperApp.oversizedWindowMessage(30000, true, 32)), ...
+    'raising the budget should raise the point limit.');
+
+% the auto-detected budget must be sane on whatever machine this runs on
+autoGB = TemporalMapperApp.memoryBudgetGB();
+assert(isscalar(autoGB) && isfinite(autoGB) && autoGB >= 2 && autoGB <= 32, ...
+    'the detected memory budget should be a finite value inside its clamp, got %g.', autoGB);
 
 % the guard counts points AFTER decimation, so downsampling is a real fix
 % rather than a way to sidestep the check
 appBigWin = TemporalMapperApp;
 TBigWin = table();
-TBigWin.x = sin((1:9000)'/50);
-TBigWin.y = cos((1:9000)'/50);
+TBigWin.x = sin((1:150000)'/50);
+TBigWin.y = cos((1:150000)'/50);
 appBigWin.loadData(TBigWin);
 appBigWin.VariableListBox.Value = 1:2;
 appBigWin.KEditField.String = '3';
@@ -279,7 +320,7 @@ appBigWin.TExcludeEditField.String = '5';
 assertThrows(@() appBigWin.buildNetwork(), 'TemporalMapperApp:windowTooLarge', ...
     'building on an oversized row range should be refused up front.');
 % ...and it must refuse BEFORE doing the expensive work, not after
-appBigWin.DownsampleEditField.String = '10'; % 9000 -> 900 points
+appBigWin.DownsampleEditField.String = '250'; % 150000 -> 600 points
 appBigWin.buildNetwork();
 assert(contains(appBigWin.StatusTextArea.String{1}, 'Built network:'), ...
     'downsampling below the threshold should let the same range build.');
