@@ -409,6 +409,46 @@ Xnan = Xlm; Xnan(5,2) = NaN;
 assertThrows(@() tknndigraph(Xnan,3,tlm,'lowMemory',true), 'tknndigraph:missingData', ...
     'lowMemory should reject NaN input just as the dense path does.');
 
+% -- g_simp's EDGE WEIGHTS are the block-average connectivity between the
+% member sets: the number of original edges running from block n to block m,
+% divided by |n| * |m|. Nothing asserted this before -- deleting the
+% normalisation in simplifyAdj outright, or dividing by only the row group
+% size, left all 9 test files printing 'All tests passed' while changing the
+% weight of every edge. Ported back from the Python toolbox, where the same
+% gap was found by mutation testing (tmapper-py PR #2).
+%   The oracle below is computed straight from the definition, so it does not
+% agree with simplifyAdj merely by construction.
+A_orig = weightedAdj(gd);
+[gs_w, mem_w] = filtergraph(gd,2,'reciprocal',true);
+A_w = weightedAdj(gs_w);
+assert(max(cellfun(@numel, mem_w)) > 1, ...
+    'fixture merges nothing, so |n|*|m| == 1 and the normalisation is invisible.');
+nChecked = 0;
+for n = 1:numel(mem_w)
+    for m = 1:numel(mem_w)
+        if n == m
+            continue  % self-loops are removed from g_simp
+        end
+        blockSum = sum(sum(A_orig(mem_w{n}, mem_w{m})));
+        expected = blockSum / (numel(mem_w{n}) * numel(mem_w{m}));
+        actual = full(A_w(n,m));
+        assert(abs(actual - expected) < 1e-12, ...
+            ['edge %d->%d has weight %g, expected block average %g ' ...
+             '(block sum %g over %dx%d members).'], ...
+            n, m, actual, expected, blockSum, numel(mem_w{n}), numel(mem_w{m}));
+        if expected ~= 0
+            nChecked = nChecked + 1;
+        end
+    end
+end
+assert(nChecked > 0, 'no non-zero edges were actually compared.');
+
+% -- and a fractional case: a 2-member block feeding a 1-member block through
+% a single edge must give weight 1/2, not 1. This is the value that a missing
+% normalisation silently turns back into an integer.
+assert(any(abs(nonzeros(A_w) - 0.5) < 1e-12), ...
+    'expected at least one half-weight edge, which is what proves the division happened.');
+
 disp('All tests passed.');
 
 function assertThrows(fcn, expectedID, msg)
