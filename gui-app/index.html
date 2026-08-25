@@ -1,0 +1,1083 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Build attractor transition networks from time-series data — a Mapper-style MATLAB toolbox for characterizing complex dynamics.">
+      
+      
+        <meta name="author" content="Mengsen Zhang">
+      
+      
+        <link rel="canonical" href="https://multiscale-complex-systems-lab.github.io/tmapper2/gui-app/">
+      
+      
+        <link rel="prev" href="../quickstart/">
+      
+      
+        <link rel="next" href="../concepts/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Interactive App - Temporal Mapper 2</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="pink" data-md-color-accent="pink">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#interactive-app" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Temporal Mapper 2" class="md-header__button md-logo" aria-label="Temporal Mapper 2" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Temporal Mapper 2
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Interactive App
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="pink" data-md-color-accent="pink"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="pink" data-md-color-accent="pink"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Multiscale-Complex-Systems-Lab/tmapper2" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Multiscale-Complex-Systems-Lab/tmapper2
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Temporal Mapper 2" class="md-nav__button md-logo" aria-label="Temporal Mapper 2" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Temporal Mapper 2
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Multiscale-Complex-Systems-Lab/tmapper2" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Multiscale-Complex-Systems-Lab/tmapper2
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive App
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#launch-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Launch it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layout
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Layout">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#variables-preprocessing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Variables &amp; Preprocessing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#network-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Network Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plot-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plot Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#missing-data-and-downsampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Missing data and downsampling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stop-cancels-between-not-mid-stage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stop cancels between, not mid-stage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#copy-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Copy Code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's next
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../applications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Applications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#launch-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Launch it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layout
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Layout">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#variables-preprocessing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Variables &amp; Preprocessing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#network-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Network Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plot-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plot Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#missing-data-and-downsampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Missing data and downsampling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stop-cancels-between-not-mid-stage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stop cancels between, not mid-stage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#copy-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Copy Code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's next
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="interactive-app">Interactive App<a class="headerlink" href="#interactive-app" title="Permanent link">&para;</a></h1>
+<p><code>gui/TemporalMapperApp.m</code> is a point-and-click alternative to the scripted
+pipeline in the <a href="../quickstart/">Quickstart</a> — load data, pick variables, set
+parameters, and view the resulting network without writing any code. It wraps
+exactly the same two-step pipeline (<code>tknndigraph</code> → <code>filtergraph</code>) and the same
+plotting functions (<code>plottmgraph</code>/<code>plotgraphtcm</code>) described elsewhere in these
+docs, so everything in <a href="../concepts/">Concepts</a> about what the parameters mean
+still applies.</p>
+<figure>
+<p><img alt="The app after building a network from the East Lansing weather data, using the same parameters as the Quickstart." src="../assets/app-screenshot.png" /></p>
+<figcaption>
+<p>The same East Lansing weather dataset and parameters as the
+<a href="../quickstart/">Quickstart</a>, built through the app instead of the command
+line.</p>
+</figcaption>
+</figure>
+<h2 id="launch-it">Launch it<a class="headerlink" href="#launch-it" title="Permanent link">&para;</a></h2>
+<div class="language-matlab highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">addpath</span><span class="p">(</span><span class="s">"tmapper_tools/"</span><span class="p">)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">addpath</span><span class="p">(</span><span class="s">"gui/"</span><span class="p">)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">app</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">TemporalMapperApp</span><span class="p">;</span>
+</span></code></pre></div>
+<h2 id="layout">Layout<a class="headerlink" href="#layout" title="Permanent link">&para;</a></h2>
+<p>The window is split into two parts: four <strong>Setup</strong> panels across the top, and
+the <strong>Network</strong>/recurrence plots filling the rest of the window.</p>
+<h3 id="data">Data<a class="headerlink" href="#data" title="Permanent link">&para;</a></h3>
+<p>Load a data file (<code>.csv</code>/<code>.txt</code>, read with <code>readtable</code>) or a table/numeric
+matrix already sitting in your base workspace. Only numeric columns are
+offered as build variables. This panel also holds <strong>Build Network</strong>, <strong>Stop</strong>
+(cancels an in-progress build — see <a href="#stop-cancels-between-not-mid-stage">below</a>),
+<strong>Reset</strong> (restores every parameter to its default, but leaves your loaded
+data and variable selection alone), <strong>Copy Code</strong>, <strong>Export...</strong> (see
+<a href="#export">below</a>), and a live <strong>Status</strong> box with per-step timing once a build
+finishes.</p>
+<h3 id="variables-preprocessing">Variables &amp; Preprocessing<a class="headerlink" href="#variables-preprocessing" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Variables</strong> — the numeric columns to build the network from (⌘/Ctrl/Shift-click for multiple; <strong>Select All</strong> as a shortcut). A leading unnamed row-index column is dropped automatically — see <a href="#missing-data-and-downsampling">below</a>.</li>
+<li><strong>z-score variables</strong> — on by default; see the Quickstart's <a href="../quickstart/#step-1-load-and-select-the-data">note on why</a>.</li>
+<li><strong>start row / end row</strong> — restrict the build to a sub-range of the loaded data. <code>end row = Inf</code> means "the last row."</li>
+<li><strong>time index</strong> — which column says who is temporally adjacent. Defaults to row order; pick a column for data with real breaks (separate sessions/trials). See <a href="#missing-data-and-downsampling">below</a>.</li>
+<li><strong>downsample (N)</strong> — keep every Nth row. A moving-average lowpass is applied first so this doesn't alias high-frequency content into spurious low-frequency structure — see <a href="#missing-data-and-downsampling">below</a>.</li>
+<li><strong>embed lag / embed order</strong> — optional <a href="../quickstart/#step-2-optional-delay-embedding">delay embedding</a>; order <code>1</code> (default) skips it.</li>
+</ul>
+<h3 id="network-parameters">Network Parameters<a class="headerlink" href="#network-parameters" title="Permanent link">&para;</a></h3>
+<p>The four <code>tknndigraph</code>/<code>filtergraph</code> parameters explained in the
+<a href="../quickstart/#step-4-build-the-spatiotemporal-graph">Quickstart</a> and
+<a href="../concepts/">Concepts</a>: <strong>k</strong>, <strong>d</strong> (labeled "compression"), <strong>texclude</strong>,
+the two <strong>max dist</strong> cutoffs, and <strong>reciprocal</strong>.</p>
+<h3 id="plot-options">Plot Options<a class="headerlink" href="#plot-options" title="Permanent link">&para;</a></h3>
+<p>Color/time axis variable, node size mode, label method, and whether to show
+the recurrence plot / a node-border scatter overlay. Changing any of these
+<strong>re-renders the existing network instead of rebuilding it</strong> — cheap, and
+safe to click through freely once a build has completed.</p>
+<div class="admonition note">
+<p class="admonition-title">Colouring by a category</p>
+<p>Text columns (condition, trial, behavioural state) are offered under
+<strong>Color by</strong>. They are treated as purely <strong>nominal</strong>: labels map to
+integer codes, the colour axis is pinned so each category owns an equal
+band (so a category keeps its colour between builds), and <code>mean</code>/<code>median</code>
+are withdrawn from <strong>Label method</strong> — averaging codes 1 and 3 gives
+code 2, which is a <em>different category</em>, not an average of two. Pair them
+with a qualitative colormap.</p>
+<p>They stay out of <strong>Variables</strong> and <strong>Time axis</strong>: distances and a time
+axis both need an order that nominal labels do not have.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Colormap</p>
+<p><code>jet</code> by default, matching <code>plottmgraph</code>'s own default. <code>lines</code>,
+<code>prism</code> and <code>colorcube</code> are <strong>qualitative</strong> — adjacent entries are
+unrelated rather than a ramp — which is what discrete labels need; the
+rest are continuous.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Date columns</p>
+<p><code>readtable</code> turns a date column into <code>datetime</code> automatically, and those
+columns are offered for <strong>Color by</strong> and <strong>Time axis</strong> — so the GUI can
+reproduce <code>tmapper_demo.m</code>'s own <code>t = dat.Date</code> axis, with the recurrence
+plot labelled in real dates rather than row numbers.</p>
+<p>They stay out of <strong>Variables</strong>, though: distances need real numbers. For
+colouring, a date is converted with <code>datenum</code> (a colormap needs numbers,
+and <code>plottmgraph</code> calls <code>isnan</code> on the colour variable, which errors on
+<code>datetime</code>); the time axis keeps the <code>datetime</code> as-is, since <code>imagesc</code>
+takes it natively.</p>
+</div>
+<h2 id="missing-data-and-downsampling">Missing data and downsampling<a class="headerlink" href="#missing-data-and-downsampling" title="Permanent link">&para;</a></h2>
+<p>Several things the scripted pipeline leaves to you are handled automatically
+here:</p>
+<div class="admonition note">
+<p class="admonition-title">Oversized row ranges are refused, not attempted</p>
+<p>Rather than thrash or exhaust memory, the app refuses up front, before
+any of the expensive work, and tells you the figure and how to fix it.
+The count is taken <em>after</em> decimation, so raising <strong>downsample (N)</strong> is
+a real fix rather than a way around the check.</p>
+<p>The budget is <strong>half this machine's physical RAM</strong> (clamped to
+2–32 GB), not a fixed number — half is a defensible share for one
+analysis app, and using total rather than <em>currently available</em> keeps
+the limit stable between runs. If the platform can't be queried it
+falls back to 4 GB.</p>
+<p>Neither the graph build nor the simplification sets that ceiling any
+more. The build runs on <code>tknndigraph</code>'s <code>lowMemory</code> path, which
+computes distances a block of rows at a time and never allocates an
+N×N array; <code>filtergraph</code> thresholds geodesics by sparse reachability
+rather than materialising them. Both are roughly <em>flat</em> in N.</p>
+<p>What remains is the <strong>recurrence plot</strong>, which is genuinely an N×N
+image of geodesic distances between time points — the feature itself,
+not waste. So the ceiling depends on whether you are showing it, and
+unchecking it is a real way to go bigger:</p>
+<table>
+<thead>
+<tr>
+<th>Show recurrence plot</th>
+<th>Peak memory</th>
+<th>Scaling</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>on</td>
+<td>4.08 GB at 20 000 points</td>
+<td>quadratic — binds first</td>
+</tr>
+<tr>
+<td>off</td>
+<td>2.10 / 2.13 / 2.14 GB at 20 000 / 40 000 / 56 000</td>
+<td><strong>flat</strong></td>
+</tr>
+</tbody>
+</table>
+<p>With it hidden, memory stops being the constraint entirely, so the
+guard switches to limiting on <strong>time</strong> (15 minutes) and says which of
+the two you actually hit. On a 64 GB machine that works out at roughly
+62 000 points with the recurrence plot and 130 000 without.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">A stray row-index column is dropped</p>
+<p>Writing a CSV without suppressing the index leaves an unnamed first
+column, which <code>readtable</code> names <code>Var1</code>. It is just a monotonic ramp, so
+leaving it selectable — and selected by default — would silently
+dominate the distance computation. It is dropped on load and the status
+area says so.</p>
+<p><code>Var1</code> is a weaker signal than it looks, since MATLAB also auto-names
+every column of a genuinely header-less file, so the check additionally
+requires that some <em>other</em> column is properly named and that the column
+really does look like a row index (numeric and strictly increasing).
+A <code>Var1</code> holding real data is kept.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Missing data is handled, not ignored</p>
+<p>A missing value in any selected variable is never passed through to the
+pipeline — an unremoved <code>NaN</code> would poison the entire distance matrix
+without any visible error. Calling <code>tknndigraph</code>/<code>plottmgraph</code> directly
+on unclean data still raises an error, per the usual <code>rmmissing</code>-first
+convention.</p>
+<p>At <code>downsample (N) = 1</code> a row with any missing selected variable is
+dropped, leaving a real gap in time. When downsampling, each kept sample
+is an average over its window and that average simply skips missing
+inputs — so an isolated <code>NaN</code> costs no sample at all, and only a sample
+whose entire window is missing is dropped. The status area reports the
+count either way.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Downsampling anti-aliases first</p>
+<p>Setting <code>downsample (N) &gt; 1</code> applies a moving-average lowpass over a
+window of size N before striding, rather than naively picking every Nth
+raw row.</p>
+<p>Decimation runs on the <strong>original</strong> row grid, never on the rows left
+after missing-data removal. Striding the survivors would slide every
+later sample off the true time grid, inventing gaps between samples that
+were in fact evenly spaced.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Supplying your own time index</p>
+<p>By default <code>tidx</code> comes from row position, which is right for a single
+continuous recording. For data with genuine breaks — separate sessions
+or trials — pick a <strong>time index</strong> column instead, and the breaks survive
+as breaks rather than being bridged.</p>
+<p>The unit is the <em>smallest</em> step between kept samples, so any larger step
+is a real gap. The column must be strictly increasing and on a regular
+grid (every step a whole multiple of the smallest); a genuinely irregular
+index has no integer grid to sit on and is refused rather than silently
+distorted. Numeric and datetime columns both work.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Real gaps stay gaps in time</p>
+<p><code>tknndigraph</code>'s <code>tidx</code> argument is what tells the pipeline which samples
+are <em>temporally</em> adjacent — it links two points only when their <code>tidx</code>
+differs by exactly 1. The app derives <code>tidx</code> from elapsed position rather
+than array position, so a genuine break in the data (a dropped row, or a
+restricted row range) leaves a jump and no temporal edge is fabricated
+across it.</p>
+</div>
+<h2 id="stop-cancels-between-not-mid-stage">Stop cancels between, not mid-stage<a class="headerlink" href="#stop-cancels-between-not-mid-stage" title="Permanent link">&para;</a></h2>
+<p><strong>Stop</strong> requests cancellation, but MATLAB callbacks run synchronously, so it
+only takes effect at the boundary between stages (distances → k-NN graph →
+simplify) — not mid-computation within one. For a very slow single stage
+(usually the distance/k-NN step on a large dataset), it may take a moment to
+actually stop.</p>
+<h2 id="export">Export<a class="headerlink" href="#export" title="Permanent link">&para;</a></h2>
+<p><strong>Export...</strong> asks for a folder and writes everything needed to carry the
+result into downstream analysis or a paper:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>network.png</code></td>
+<td>the attractor transition network, at 200 dpi</td>
+</tr>
+<tr>
+<td><code>recurrence.png</code></td>
+<td>the geodesic recurrence plot (only when it is shown)</td>
+</tr>
+<tr>
+<td><code>timeline.csv</code></td>
+<td>one row per retained time point: <code>tidx</code>, <code>source_row</code>, <code>node</code>, plus the chosen colour/time columns</td>
+</tr>
+<tr>
+<td><code>params.json</code></td>
+<td>full provenance — every preprocessing and network setting, the <em>resolved</em> <code>maxNeighborDist</code>, and the resulting network's size</td>
+</tr>
+<tr>
+<td><code>reproduce.m</code></td>
+<td>the same standalone script <strong>Copy Code</strong> puts on the clipboard</td>
+</tr>
+</tbody>
+</table>
+<p><code>timeline.csv</code> is the one that matters most: it is the join-back table saying
+<strong>which attractor the system was in at each time point</strong>, which is what
+dwell-time, transition-rate and occupancy analyses actually need — and the
+one thing that cannot be recovered from the figures.</p>
+<p>The figures are written from the axes rather than the window, so you get just
+the plot, not a screenshot of the whole GUI.</p>
+<div class="admonition note">
+<p class="admonition-title">params.json records the build, not the controls</p>
+<p>Every value in it comes from the build that produced these figures, so
+changing a field after building and then exporting still describes what
+you are actually looking at.</p>
+</div>
+<h2 id="copy-code">Copy Code<a class="headerlink" href="#copy-code" title="Permanent link">&para;</a></h2>
+<p><strong>Copy Code</strong> puts a complete, standalone script on the clipboard that
+reproduces the current build — including the data-loading line if you loaded
+a file — using the exact resolved parameters shown in the app. This is the
+bridge back to scripting: prototype interactively here, then paste the
+generated code into your own analysis once you have parameters you like.</p>
+<h2 id="whats-next">What's next<a class="headerlink" href="#whats-next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../concepts/">Concepts</a> — what the network's nodes, edges, and loops mean.</li>
+<li><a href="../quickstart/">Quickstart</a> — the same pipeline, scripted end to end.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
