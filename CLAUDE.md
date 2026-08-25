@@ -11,6 +11,7 @@ This is a pure MATLAB codebase with **no build system, package manager, or linte
 There *are* tests and CI, though:
 
 - `tests/test_*.m` — plain, dependency-free scripts (not `matlab.unittest` classes). Each prints `All tests passed.` and errors out via `assert()` on the first failing check. Run one with `matlab -batch "run('tests/test_core_pipeline.m')"`, or open and run it in the GUI.
+- `tests/runall.m` — runs every `tests/test_*.m`, one line per file, erroring out if any fail: `matlab -batch "addpath('tests'); runall"`. It is a *function* file, so `run('tests/runall.m')` does **not** work on it. Use this rather than writing a loop over `dir('tests/test_*.m')` inline. `run` executes a script in the *caller's* workspace, so a test that assigns a common name (`test_cyclepath.m` does) silently clobbers a naive driver's loop variables — that reported `6/9 passed` on a fully green suite, and still exited 0. `runall` calls each script through an inner function so its assignments cannot reach the loop state. It is deliberately not named `test_runall.m`, since the CI glob would then recurse into it.
 - `.github/workflows/tests.yml` — runs every `tests/test_*.m` on each push to `main` and each PR, via MathWorks' `matlab-actions` (free MATLAB license for public repos), requesting the Statistics and Machine Learning Toolbox explicitly since the base CI install lacks it. New test files are picked up automatically by the `test_*.m` glob; no workflow change needed.
 - `.github/workflows/docs.yml` — builds and deploys the MkDocs site.
 
